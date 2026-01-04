@@ -1,0 +1,80 @@
+# ===============================
+# Node / npm
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===============================
+# Build output
+# ===============================
+dist/
+build/
+.esbuild/
+.vite/
+
+# ===============================
+# Vite / React
+# ===============================
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+
+# ===============================
+# TypeScript
+# ===============================
+*.tsbuildinfo
+
+# ===============================
+# Environment variables
+# ===============================
+.env
+.env.*
+!.env.example
+
+# ===============================
+# SQLite / Database
+# ===============================
+*.sqlite
+*.sqlite3
+*.db
+drizzle/
+drizzle.meta/
+
+# ===============================
+# Logs
+# ===============================
+logs/
+*.log
+
+# ===============================
+# OS / Editor
+# ===============================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# IntelliJ / WebStorm
+.idea/
+
+# ===============================
+# Testing / Coverage
+# ===============================
+coverage/
+
+# ===============================
+# Optional native builds
+# ===============================
+*.node
+
+# ===============================
+# Temporary files
+# ===============================
+tmp/
+temp/
+.cache/
+
