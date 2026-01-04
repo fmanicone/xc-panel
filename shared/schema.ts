@@ -7,9 +7,9 @@ export const settings = pgTable("settings", {
   id: serial("id").primaryKey(),
   
   // Application Info
-  appName: text("app_name").notNull().default("AltaIPTV"),
-  customerId: text("customer_id").notNull().default("2001"),
-  versionCode: text("version_code").notNull().default("2001"),
+  appName: text("app_name").notNull().default("MultififaIPTV"),
+  customerId: text("customer_id").notNull().default("2000"),
+  versionCode: text("version_code").notNull().default("2000"),
   loginType: text("login_type").notNull().default("login"),
   
   // Developer Info
