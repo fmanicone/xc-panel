@@ -495,7 +495,11 @@ export async function registerRoutes(
     
     const tag = req.query.tag as string;
     const userId = req.query.userid as string;
-    const ipAddress = req.ip || req.socket.remoteAddress || "";
+    const ipAddress =
+      (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      '';
 
     try {
       const settings = storage.getSettings();
