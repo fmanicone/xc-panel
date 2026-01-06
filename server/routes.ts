@@ -225,6 +225,7 @@ export async function registerRoutes(
 
   // CloudBackup.php endpoint - handles cloud backup save and restore
   app.all("/api/CloudBackup.php", (req, res) => {
+    console.log('CloudBackup request:', { method: req.method, body: req.body, query: req.query });
     try {
       const resetcode = req.body?.resetcode || req.query?.resetcode || '';
       const backup = req.body?.backup || req.query?.backup || '';
