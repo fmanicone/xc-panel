@@ -133,6 +133,27 @@ server {
     listen 80;
     server_name yourdomain.com;
 
+    location = /api/ottrun/ApiIPTV.php {
+
+        if ($arg_tag = "intro") {
+            rewrite ^/api/ottrun/ApiIPTV\.php$ /api/intro.php last;
+        }
+
+        rewrite ^/api/ottrun/ApiIPTV\.php$ /api/ApiIPTV.php last;
+    }
+
+    location /uploads/ {
+        alias <main_dir_code>/uploads/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /vpn/ {
+        alias <main_dir_code>/vpn/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
     location / {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
