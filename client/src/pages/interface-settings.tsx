@@ -15,9 +15,6 @@ import themeD from "@assets/theme_images/d.jpg";
 import theme1 from "@assets/theme_images/1.jpg";
 import theme2 from "@assets/theme_images/2.jpg";
 import theme3 from "@assets/theme_images/3.jpg";
-import theme4 from "@assets/theme_images/4.jpg";
-import theme5 from "@assets/theme_images/5.jpg";
-import theme6 from "@assets/theme_images/6.jpg";
 import themeNewLayout from "@assets/theme_images/new_layout.jpg";
 
 const themeImages: Record<string, string> = {
@@ -25,9 +22,6 @@ const themeImages: Record<string, string> = {
   "1": theme1,
   "2": theme2,
   "3": theme3,
-  "4": theme4,
-  "5": theme5,
-  "6": theme6,
   "new_layout": themeNewLayout,
 };
 
@@ -38,9 +32,6 @@ const features = [
   { key: "series", label: "Series", description: "Show TV Series section" },
   { key: "catchup", label: "Catchup", description: "Show Catchup/Replay feature" },
   { key: "radio", label: "Radio", description: "Show Radio stations" },
-  { key: "multiscreen", label: "Multi-Screen", description: "Show multi-screen option" },
-  { key: "favorite", label: "Favorites", description: "Show favorites section" },
-  { key: "account", label: "Account", description: "Show account settings" },
 ];
 
 const portals = ["Portal 1", "Portal 2", "Portal 3", "Portal 4", "Portal 5"];
@@ -84,9 +75,18 @@ export default function InterfaceSettings() {
         showReminders: settings.showReminders,
         showRecord: settings.showRecord,
         showVpn: settings.showVpn,
+        showMultiscreen: settings.showMultiscreen,
+        showFavorites: settings.showFavorites,
+        showAccount: settings.showAccount,
         showMessage: settings.showMessage,
         showUpdate: settings.showUpdate,
         showSubExpiry: settings.showSubExpiry,
+        settingsAppIcon: settings.settingsAppIcon,
+        settingsAccountIcon: settings.settingsAccountIcon,
+        sendUdid: settings.sendUdid,
+        hideAutoConnVpn: settings.hideAutoConnVpn,
+        hideOtherLoginType: settings.hideOtherLoginType,
+        maxEpgFileSize: settings.maxEpgFileSize,
       });
       toast({ title: "Saved", description: "Interface settings updated" });
     } catch (err) {
@@ -275,6 +275,36 @@ export default function InterfaceSettings() {
                     onCheckedChange={(v) => setSettings({ ...settings, showVpn: v ? "Enabled" : "Disabled" })}
                   />
                 </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Multi-Screen</Label>
+                    <p className="text-xs text-muted-foreground">Show multi-screen option</p>
+                  </div>
+                  <Switch
+                    checked={settings.showMultiscreen === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, showMultiscreen: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Favorites</Label>
+                    <p className="text-xs text-muted-foreground">Show favorites section</p>
+                  </div>
+                  <Switch
+                    checked={settings.showFavorites === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, showFavorites: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Account</Label>
+                    <p className="text-xs text-muted-foreground">Show account settings</p>
+                  </div>
+                  <Switch
+                    checked={settings.showAccount === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, showAccount: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -313,6 +343,84 @@ export default function InterfaceSettings() {
                     checked={settings.showSubExpiry === "Enabled"}
                     onCheckedChange={(v) => setSettings({ ...settings, showSubExpiry: v ? "Enabled" : "Disabled" })}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Other Settings</CardTitle>
+                <CardDescription>Additional configuration options</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Settings App Icon</Label>
+                    <p className="text-xs text-muted-foreground">Show settings icon in app</p>
+                  </div>
+                  <Switch
+                    checked={settings.settingsAppIcon === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, settingsAppIcon: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Settings Account Icon</Label>
+                    <p className="text-xs text-muted-foreground">Show account icon in settings</p>
+                  </div>
+                  <Switch
+                    checked={settings.settingsAccountIcon === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, settingsAccountIcon: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Send UDID in Login</Label>
+                    <p className="text-xs text-muted-foreground">Send device ID during login</p>
+                  </div>
+                  <Switch
+                    checked={settings.sendUdid === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, sendUdid: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Hide Auto VPN Connection</Label>
+                    <p className="text-xs text-muted-foreground">Hide auto-connect VPN button</p>
+                  </div>
+                  <Switch
+                    checked={settings.hideAutoConnVpn === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, hideAutoConnVpn: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Hide Other Login Types</Label>
+                    <p className="text-xs text-muted-foreground">Hide other login options in accounts</p>
+                  </div>
+                  <Switch
+                    checked={settings.hideOtherLoginType === "Enabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, hideOtherLoginType: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>EPG Max File Size (MB)</Label>
+                  <Select
+                    value={settings.maxEpgFileSize || "50"}
+                    onValueChange={(v) => setSettings({ ...settings, maxEpgFileSize: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="50">50 MB</SelectItem>
+                      <SelectItem value="60">60 MB</SelectItem>
+                      <SelectItem value="80">80 MB</SelectItem>
+                      <SelectItem value="100">100 MB</SelectItem>
+                      <SelectItem value="125">125 MB</SelectItem>
+                      <SelectItem value="150">150 MB</SelectItem>
+                      <SelectItem value="200">200 MB</SelectItem>
+                      <SelectItem value="5000">No Limit</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>

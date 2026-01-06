@@ -33,7 +33,6 @@ export default function LanguageSettings() {
     try {
       await updateSettings({
         appLanguage: settings.appLanguage,
-        userLanguage: settings.userLanguage,
       });
       toast({ title: "Success", description: "Language updated" });
     } catch (err) {
@@ -59,23 +58,6 @@ export default function LanguageSettings() {
               onValueChange={(v) => setSettings({ ...settings, appLanguage: v })}
             >
               <SelectTrigger data-testid="select-app-language">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {languageOptions.map((l) => (
-                  <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-center text-sm text-muted-foreground">Pick Your Language</p>
-          <div>
-            <Label>User Language</Label>
-            <Select
-              value={settings.userLanguage || "it"}
-              onValueChange={(v) => setSettings({ ...settings, userLanguage: v })}
-            >
-              <SelectTrigger data-testid="select-user-language">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -231,24 +231,10 @@ export default function GeneralSettings() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Developer Info</CardTitle>
+                <CardTitle className="text-lg">Support Info</CardTitle>
                 <CardDescription>Contact information shown in app</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Developer Name</Label>
-                  <Input
-                    value={settings.developerName || ""}
-                    onChange={(e) => setSettings({ ...settings, developerName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Developer Contact</Label>
-                  <Input
-                    value={settings.developerContact || ""}
-                    onChange={(e) => setSettings({ ...settings, developerContact: e.target.value })}
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label>Support Email</Label>
                   <Input
@@ -287,7 +273,7 @@ export default function GeneralSettings() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Portal {num} URL</Label>
+                    <Label>Portal {num} URL (0 = No Portal)</Label>
                     <Input
                       data-testid={num === 1 ? "input-portal1-url" : undefined}
                       value={(settings as any)[`portal${num}Url`] || ""}
@@ -299,6 +285,22 @@ export default function GeneralSettings() {
               ))}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                <div className="space-y-2">
+                  <Label>CUSTOM VOD PORTAL (no = No Portal)</Label>
+                  <Input
+                    value={settings.portalVod || ""}
+                    onChange={(e) => setSettings({ ...settings, portalVod: e.target.value })}
+                    placeholder="http://example.com/epg.xml"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CUSTOM SERIES PORTAL (no = No Portal)</Label>
+                  <Input
+                    value={settings.portalSeries || ""}
+                    onChange={(e) => setSettings({ ...settings, portalSeries: e.target.value })}
+                    placeholder="http://example.com/epg.xml"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>EPG URL</Label>
                   <Input

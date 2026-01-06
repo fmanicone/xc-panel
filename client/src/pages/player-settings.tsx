@@ -15,11 +15,6 @@ const yesNoOptions = [
   { value: "no", label: "No" },
 ];
 
-const streamTypeOptions = [
-  { value: "MPEGTS (ts)", label: "MPEGTS (ts)" },
-  { value: "HLS (m3u8)", label: "HLS (m3u8)" },
-];
-
 const exoResizeOptions = [
   { value: "0", label: "Best Fit" },
   { value: "1", label: "Fixed" },
@@ -29,11 +24,11 @@ const exoResizeOptions = [
 ];
 
 const vlcResizeOptions = [
-  { value: "0", label: "Default (0)" },
-  { value: "1", label: "Fit Screen (1)" },
-  { value: "2", label: "Fill Screen (2)" },
-  { value: "3", label: "16:9 (3)" },
-  { value: "4", label: "4:3 (4)" },
+  { value: "0", label: "Best Fit" },
+  { value: "1", label: "16:9" },
+  { value: "2", label: "4:3" },
+  { value: "3", label: "Original" },
+  { value: "4", label: "Fill" },
 ];
 
 const volumeOptions = [
@@ -46,13 +41,9 @@ const volumeOptions = [
 
 const exoBufferOptions = [
   { value: "10000", label: "10000" },
-  { value: "15000", label: "15000" },
   { value: "20000", label: "20000" },
-  { value: "25000", label: "25000" },
   { value: "30000", label: "30000" },
-  { value: "35000", label: "35000" },
   { value: "40000", label: "40000" },
-  { value: "45000", label: "45000" },
   { value: "50000", label: "50000" },
 ];
 
@@ -90,16 +81,12 @@ export default function PlayerSettings() {
     setSaving(true);
     try {
       await updateSettings({
-        playerLive: settings.playerLive,
-        playerEpg: settings.playerEpg,
         playerVod: settings.playerVod,
         playerSeries: settings.playerSeries,
         playerCatchup: settings.playerCatchup,
         appLanguage: settings.appLanguage,
-        userLanguage: settings.userLanguage,
         defaultPlayer: settings.defaultPlayer,
         playerTv: settings.playerTv,
-        streamType: settings.streamType,
         vlcHw: settings.vlcHw,
         lastVolumeVlc: settings.lastVolumeVlc,
         playerVlcBuffer: settings.playerVlcBuffer,
@@ -163,8 +150,8 @@ export default function PlayerSettings() {
           <div>
             <Label>Live TV Player</Label>
             <Select
-              value={settings.playerTv || settings.playerLive || "EXO"}
-              onValueChange={(v) => setSettings({ ...settings, playerTv: v, playerLive: v })}
+              value={settings.playerTv || "EXO"}
+              onValueChange={(v) => setSettings({ ...settings, playerTv: v })}
             >
               <SelectTrigger data-testid="select-player-tv">
                 <SelectValue />
@@ -228,22 +215,6 @@ export default function PlayerSettings() {
             </Select>
           </div>
 
-          <div>
-            <Label>Stream Type</Label>
-            <Select
-              value={settings.streamType || "MPEGTS (ts)"}
-              onValueChange={(v) => setSettings({ ...settings, streamType: v })}
-            >
-              <SelectTrigger data-testid="select-stream-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {streamTypeOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
 
@@ -443,22 +414,6 @@ export default function PlayerSettings() {
               onValueChange={(v) => setSettings({ ...settings, appLanguage: v })}
             >
               <SelectTrigger data-testid="select-app-language">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {languageOptions.map((l) => (
-                  <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>User Language</Label>
-            <Select
-              value={settings.userLanguage || "it"}
-              onValueChange={(v) => setSettings({ ...settings, userLanguage: v })}
-            >
-              <SelectTrigger data-testid="select-user-language">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

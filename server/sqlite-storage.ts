@@ -13,8 +13,6 @@ export interface SqliteSettings {
   announcementsEnabled: string;
   messagesEnabled: string;
   updateUserInfo: string;
-  developerName: string;
-  developerContact: string;
   supportEmail: string;
   supportPhone: string;
   portal1Name: string;
@@ -27,6 +25,8 @@ export interface SqliteSettings {
   portal4Url: string;
   portal5Name: string;
   portal5Url: string;
+  portalVod: string,
+  portalSeries: string,
   apkUrl: string;
   backupUrl: string;
   epgUrl: string;
@@ -40,17 +40,23 @@ export interface SqliteSettings {
   showReminders: string;
   showRecord: string;
   showVpn: string;
+  showMultiscreen: string;
+  showFavorites: string;
+  showAccount: string;
+  settingsAppIcon: string;
+  settingsAccountIcon: string;
+  sendUdid: string;
+  hideAutoConnVpn: string;
+  hideOtherLoginType: string;
+  maxEpgFileSize: string;
   showMessage: string;
   showUpdate: string;
   showSubExpiry: string;
   interfaceToggles: Record<string, string>;
   theme: string;
-  livePlayer: string;
-  epgPlayer: string;
   vodPlayer: string;
   seriesPlayer: string;
   appLanguage: string;
-  pickerLanguage: string;
   maintenanceMode: string;
   maintenanceMessage: string;
   apkAutoUpdate: string;
@@ -87,11 +93,9 @@ export interface SqliteSettings {
   
   defaultPlayer: string;
   playerTv: string;
-  playerLive: string;
   playerVod: string;
   playerSeries: string;
   playerCatchup: string;
-  streamType: string;
   
   vlcHw: string;
   lastVolumeVlc: string;
@@ -204,8 +208,6 @@ function rowToSettings(row: any): SqliteSettings {
     announcementsEnabled: row.announcements_enabled,
     messagesEnabled: row.messages_enabled,
     updateUserInfo: row.update_user_info,
-    developerName: row.developer_name,
-    developerContact: row.developer_contact,
     supportEmail: row.support_email,
     supportPhone: row.support_phone,
     portal1Name: row.portal1_name,
@@ -218,6 +220,8 @@ function rowToSettings(row: any): SqliteSettings {
     portal4Url: row.portal4_url,
     portal5Name: row.portal5_name,
     portal5Url: row.portal5_url,
+    portalVod: row.portal_vod,
+    portalSeries: row.portal_series,
     apkUrl: row.apk_url,
     backupUrl: row.backup_url,
     epgUrl: row.epg_url,
@@ -231,17 +235,23 @@ function rowToSettings(row: any): SqliteSettings {
     showReminders: row.show_reminders,
     showRecord: row.show_record,
     showVpn: row.show_vpn,
+    showMultiscreen: row.show_multiscreen || 'Disabled',
+    showFavorites: row.show_favorites || 'Enabled',
+    showAccount: row.show_account || 'Enabled',
+    settingsAppIcon: row.settings_app_icon || 'Enabled',
+    settingsAccountIcon: row.settings_account_icon || 'Enabled',
+    sendUdid: row.send_udid || 'Disabled',
+    hideAutoConnVpn: row.hide_auto_conn_vpn || 'Disabled',
+    hideOtherLoginType: row.hide_other_login_type || 'Disabled',
+    maxEpgFileSize: row.max_epg_file_size || '50',
     showMessage: row.show_message,
     showUpdate: row.show_update,
     showSubExpiry: row.show_sub_expiry,
     interfaceToggles: row.interface_toggles ? JSON.parse(row.interface_toggles) : {},
     theme: row.theme,
-    livePlayer: row.live_player,
-    epgPlayer: row.epg_player,
     vodPlayer: row.vod_player,
     seriesPlayer: row.series_player,
     appLanguage: row.app_language,
-    pickerLanguage: row.picker_language,
     maintenanceMode: row.maintenance_mode,
     maintenanceMessage: row.maintenance_message,
     apkAutoUpdate: row.apk_auto_update || 'yes',
@@ -278,11 +288,9 @@ function rowToSettings(row: any): SqliteSettings {
     
     defaultPlayer: row.default_player || 'EXO',
     playerTv: row.player_tv || 'EXO',
-    playerLive: row.live_player || 'EXO',
     playerVod: row.vod_player || 'VLC',
     playerSeries: row.series_player || 'VLC',
     playerCatchup: row.player_catchup || 'VLC',
-    streamType: row.stream_type || 'MPEGTS (ts)',
     
     vlcHw: row.vlc_hw || 'yes',
     lastVolumeVlc: row.last_volume_vlc || '100',
@@ -382,8 +390,6 @@ export const sqliteStorage = {
       announcementsEnabled: 'announcements_enabled',
       messagesEnabled: 'messages_enabled',
       updateUserInfo: 'update_user_info',
-      developerName: 'developer_name',
-      developerContact: 'developer_contact',
       supportEmail: 'support_email',
       supportPhone: 'support_phone',
       portal1Name: 'portal1_name',
@@ -396,6 +402,8 @@ export const sqliteStorage = {
       portal4Url: 'portal4_url',
       portal5Name: 'portal5_name',
       portal5Url: 'portal5_url',
+      portalVod: 'portal_vod',
+      portalSeries: 'portal_series',
       apkUrl: 'apk_url',
       backupUrl: 'backup_url',
       epgUrl: 'epg_url',
@@ -409,17 +417,23 @@ export const sqliteStorage = {
       showReminders: 'show_reminders',
       showRecord: 'show_record',
       showVpn: 'show_vpn',
+      showMultiscreen: 'show_multiscreen',
+      showFavorites: 'show_favorites',
+      showAccount: 'show_account',
+      settingsAppIcon: 'settings_app_icon',
+      settingsAccountIcon: 'settings_account_icon',
+      sendUdid: 'send_udid',
+      hideAutoConnVpn: 'hide_auto_conn_vpn',
+      hideOtherLoginType: 'hide_other_login_type',
+      maxEpgFileSize: 'max_epg_file_size',
       showMessage: 'show_message',
       showUpdate: 'show_update',
       showSubExpiry: 'show_sub_expiry',
       interfaceToggles: 'interface_toggles',
       theme: 'theme',
-      livePlayer: 'live_player',
-      epgPlayer: 'epg_player',
       vodPlayer: 'vod_player',
       seriesPlayer: 'series_player',
       appLanguage: 'app_language',
-      pickerLanguage: 'picker_language',
       maintenanceMode: 'maintenance_mode',
       maintenanceMessage: 'maintenance_message',
       maintenanceStatus: 'maintenance_mode',
@@ -457,11 +471,9 @@ export const sqliteStorage = {
       
       defaultPlayer: 'default_player',
       playerTv: 'player_tv',
-      playerLive: 'live_player',
       playerVod: 'vod_player',
       playerSeries: 'series_player',
       playerCatchup: 'player_catchup',
-      streamType: 'stream_type',
       
       vlcHw: 'vlc_hw',
       lastVolumeVlc: 'last_volume_vlc',

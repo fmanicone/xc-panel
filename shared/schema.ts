@@ -12,9 +12,7 @@ export const settings = pgTable("settings", {
   versionCode: text("version_code").notNull().default("2000"),
   loginType: text("login_type").notNull().default("login"),
   
-  // Developer Info
-  developerName: text("developer_name").default(""),
-  developerContact: text("developer_contact").default(""),
+  // Support Info
   supportEmail: text("support_email").default(""),
   supportPhone: text("support_phone").default(""),
   
@@ -33,6 +31,8 @@ export const settings = pgTable("settings", {
   // Other URLs
   apkUrl: text("apk_url").default(""),
   backupUrl: text("backup_url").default(""),
+  portalVod: text("portal_vod").default("no"),
+  portalSeries: text("portal_series").default("no"),
   epgUrl: text("epg_url").default("No"),
   ovpnConfigUrl: text("ovpn_config_url").default("No"),
   
@@ -61,37 +61,36 @@ export const settings = pgTable("settings", {
   showReminders: text("show_reminders").default("Disabled"),
   showRecord: text("show_record").default("Disabled"),
   showVpn: text("show_vpn").default("Enabled"),
+  showMultiscreen: text("show_multiscreen").default("Disabled"),
+  showFavorites: text("show_favorites").default("Enabled"),
+  showAccount: text("show_account").default("Enabled"),
   showMessage: text("show_message").default("Enabled"),
   showUpdate: text("show_update").default("Enabled"),
   showSubExpiry: text("show_sub_expiry").default("Disabled"),
+
+  // Other Settings
+  settingsAppIcon: text("settings_app_icon").default("Enabled"),
+  settingsAccountIcon: text("settings_account_icon").default("Enabled"),
+  sendUdid: text("send_udid").default("Disabled"),
+  hideAutoConnVpn: text("hide_auto_conn_vpn").default("Disabled"),
+  hideOtherLoginType: text("hide_other_login_type").default("Disabled"),
+  maxEpgFileSize: text("max_epg_file_size").default("50"),
   
   // Theme
   theme: text("theme").default("3"),
-  
+
   // Language
   appLanguage: text("app_language").default("Italian"),
-  userLanguage: text("user_language").default("Italian"),
-  
+
   // Players
-  playerLive: text("player_live").default("EXO"),
-  playerEpg: text("player_epg").default("EXO"),
   playerVod: text("player_vod").default("EXO"),
   playerSeries: text("player_series").default("EXO"),
   playerCatchup: text("player_catchup").default("VLC"),
-  
+
   // Maintenance
   maintenanceMessage: text("maintenance_message").default("Maintenance in progress..."),
   maintenanceStatus: text("maintenance_status").default("INACTIVE"),
   maintenanceExpire: text("maintenance_expire").default("2025-12-31 23:59:00"),
-  
-  // Remote Update
-  remoteUpdateEnabled: text("remote_update_enabled").default("yes"),
-  
-  // Ads (JSON)
-  adsConfig: jsonb("ads_config").$type<Record<string, any>>().default({}),
-  
-  // Parental PIN
-  parentalPinEnabled: text("parental_pin_enabled").default("no"),
   
   // VAST Ads Settings
   vastEnabled: text("vast_enabled").default("no"),
@@ -110,7 +109,6 @@ export const settings = pgTable("settings", {
   // Player Selection
   defaultPlayer: text("default_player").default("EXO"),
   playerTv: text("player_tv").default("EXO"),
-  streamType: text("stream_type").default("MPEGTS (ts)"),
   
   // VLC Player Settings (ort_settings)
   vlcHw: text("vlc_hw").default("yes"),
@@ -263,9 +261,6 @@ export const themeOptions = [
   { value: "1", label: "Theme 1" },
   { value: "2", label: "Theme 2" },
   { value: "3", label: "Theme 3" },
-  { value: "4", label: "Theme 4" },
-  { value: "5", label: "Theme 5" },
-  { value: "6", label: "Theme 6" },
   { value: "new_layout", label: "New Layout" },
 ];
 

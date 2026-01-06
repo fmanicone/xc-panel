@@ -44,6 +44,8 @@ mainDb.exec(`
     portal4_url TEXT DEFAULT '',
     portal5_name TEXT DEFAULT '',
     portal5_url TEXT DEFAULT '',
+    portal_vod TEXT DEFAULT '',
+    portal_series TEXT DEFAULT '',
     apk_url TEXT DEFAULT '',
     backup_url TEXT DEFAULT '',
     epg_url TEXT DEFAULT 'No',
@@ -84,6 +86,17 @@ mainDb.exec(`
 `);
 
 const widgetColumns = [
+  { name: 'portal_vod', def: "TEXT DEFAULT 'no'" },
+  { name: 'portal_series', def: "TEXT DEFAULT 'no'" },
+  { name: 'show_multiscreen', def: "TEXT DEFAULT 'Disabled'" },
+  { name: 'show_favorites', def: "TEXT DEFAULT 'Enabled'" },
+  { name: 'show_account', def: "TEXT DEFAULT 'Enabled'" },
+  { name: 'settings_app_icon', def: "TEXT DEFAULT 'Enabled'" },
+  { name: 'settings_account_icon', def: "TEXT DEFAULT 'Enabled'" },
+  { name: 'send_udid', def: "TEXT DEFAULT 'Disabled'" },
+  { name: 'hide_auto_conn_vpn', def: "TEXT DEFAULT 'Disabled'" },
+  { name: 'hide_other_login_type', def: "TEXT DEFAULT 'Disabled'" },
+  { name: 'max_epg_file_size', def: "TEXT DEFAULT '50'" },
   { name: 'widget_width', def: "TEXT DEFAULT '280'" },
   { name: 'widget_height', def: "TEXT DEFAULT '500'" },
   { name: 'widget_color', def: "TEXT DEFAULT '#005df8'" },
