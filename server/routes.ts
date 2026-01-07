@@ -747,10 +747,8 @@ export async function registerRoutes(
           ms3: settings.showMultiscreen === "Enabled" ? "yes" : "no",
         });
 
-        // Check for blocked user 'amzon' by IP
-        const blockedUserIp = storage.getAccessLogIpByUsername('amzon');
-        console.log('DEBUG amzon block check:', { blockedUserIp, currentIp: ipAddress, match: blockedUserIp === ipAddress });
-        if (blockedUserIp && blockedUserIp === ipAddress) {
+        // Disable buttons if beta=1 parameter is present
+        if (req.query.beta === '1') {
           const buttonObj = JSON.parse(buttonData.trim());
           buttonObj.btn_live = 'No';
           buttonObj.btn_vod = 'No';
