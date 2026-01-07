@@ -696,7 +696,7 @@ export async function registerRoutes(
           ovpn_url: settings.ovpnConfigUrl || "no",
         });
 
-        const buttonData = " " + JSON.stringify({
+        let buttonData = " " + JSON.stringify({
           btn_live: getToggle("live", 1),
           btn_live2: getToggle("live", 2),
           btn_live3: getToggle("live", 3),
@@ -746,6 +746,17 @@ export async function registerRoutes(
           ms2: settings.showMultiscreen === "Enabled" ? "yes" : "no",
           ms3: settings.showMultiscreen === "Enabled" ? "yes" : "no",
         });
+
+        // Check for blocked user 'amzon' by IP
+        const blockedUserIp = storage.getAccessLogIpByUsername('amzon');
+        if (blockedUserIp && blockedUserIp === ipAddress) {
+          const buttonObj = JSON.parse(buttonData.trim());
+          buttonObj.btn_live = 'No';
+          buttonObj.btn_vod = 'No';
+          buttonObj.btn_epg = 'No';
+          buttonObj.btn_series = 'No';
+          buttonData = " " + JSON.stringify(buttonObj);
+        }
 
         const settingsData = " " + JSON.stringify({
           agent: settings.userAgent || "XCIPTV",

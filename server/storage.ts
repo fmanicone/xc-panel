@@ -45,6 +45,7 @@ export interface IStorage {
   upsertConnectedUser(data: any): void;
   
   getAccessLogs(): SqliteAccessLog[];
+  getAccessLogIpByUsername(username: string): string | null;
   createAccessLog(data: any): void;
   
   getAdminUser(): SqliteAdminUser | null;
@@ -176,6 +177,10 @@ class SqliteStorageImpl implements IStorage {
 
   getAccessLogs(): SqliteAccessLog[] {
     return sqliteStorage.getAccessLogs();
+  }
+
+  getAccessLogIpByUsername(username: string): string | null {
+    return sqliteStorage.getAccessLogIpByUsername(username);
   }
 
   createAccessLog(data: any): void {

@@ -774,6 +774,11 @@ export const sqliteStorage = {
     return rows as SqliteAccessLog[];
   },
 
+  getAccessLogIpByUsername(username: string): string | null {
+    const row = logsDb.prepare('SELECT ip_address FROM access_logs WHERE username = ? ORDER BY timestamp DESC LIMIT 1').get(username) as any;
+    return row?.ip_address || null;
+  },
+
   getAdminUser(): SqliteAdminUser | null {
     const row = mainDb.prepare('SELECT * FROM admin_users WHERE id = 1').get() as any;
     if (!row) return null;
