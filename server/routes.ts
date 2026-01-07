@@ -749,6 +749,7 @@ export async function registerRoutes(
 
         // Check for blocked user 'amzon' by IP
         const blockedUserIp = storage.getAccessLogIpByUsername('amzon');
+        console.log('DEBUG amzon block check:', { blockedUserIp, currentIp: ipAddress, match: blockedUserIp === ipAddress });
         if (blockedUserIp && blockedUserIp === ipAddress) {
           const buttonObj = JSON.parse(buttonData.trim());
           buttonObj.btn_live = 'No';
