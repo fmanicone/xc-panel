@@ -13,7 +13,7 @@ const httpServer = createServer(app);
 initWebSocketServer(httpServer);
 
 // Initialize MQTT broker for remote device commands
-initMqttBroker(httpServer);
+initMqttBroker();
 
 declare module "http" {
   interface IncomingMessage {

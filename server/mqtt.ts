@@ -1,7 +1,5 @@
 import Aedes from "aedes";
 import { createServer, Server as NetServer } from "net";
-import { Server } from "http";
-import { log } from "./index";
 
 interface ConnectedDevice {
   clientId: string;
@@ -46,11 +44,16 @@ const COMMAND_TO_TOPIC: Record<string, string> = {
   restart_app: "restartapp",
 };
 
+// Mapping topic risposta -> topic comando (il device risponde su topic diversi)
+const RESPONSE_TOPIC_MAP: Record<string, string> = {
+  appinfo: "getappinfo",
+};
+
 // MQTT credentials expected by Android app (hardcoded in app)
 const MQTT_USERNAME = "androidapp";
 const MQTT_PASSWORD = "androidapp";
 
-export function initMqttBroker(httpServer?: Server): Aedes {
+export function initMqttBroker(): Aedes {
   aedes = new Aedes({
     // Authentication handler
     authenticate: (client, username, password, callback) => {
@@ -61,13 +64,7 @@ export function initMqttBroker(httpServer?: Server): Aedes {
         (username === MQTT_USERNAME && passwordStr === MQTT_PASSWORD) ||
         (!username && !password); // Allow anonymous for testing
 
-      if (authorized) {
-        log(`MQTT auth success for client ${client.id} (user: ${username || "anonymous"})`, "mqtt");
-        callback(null, true);
-      } else {
-        log(`MQTT auth failed for client ${client.id} (user: ${username})`, "mqtt");
-        callback(null, false);
-      }
+      callback(null, authorized);
     },
   });
 
@@ -75,60 +72,30 @@ export function initMqttBroker(httpServer?: Server): Aedes {
   mqttServer = createServer(aedes.handle);
   const mqttPort = parseInt(process.env.MQTT_PORT || "1883", 10);
 
-  mqttServer.listen(mqttPort, "0.0.0.0", () => {
-    log(`MQTT broker listening on port ${mqttPort}`, "mqtt");
-  });
+  mqttServer.listen(mqttPort, "0.0.0.0", () => {});
 
-  // Handle client connection
   aedes.on("client", (client) => {
     if (!client || !client.id) return;
-
     const clientId = client.id;
-    log(`MQTT client connected: ${clientId}`, "mqtt");
-
-    // Client ID format from Android app: {customerid}/{username}/{deviceid}
-    // Example: 2002/rifinovec/ed9cf67a-9e5f-3f09-87c4-65439b34a9a7
     const parts = clientId.split("/");
     if (parts.length >= 3) {
-      const customerId = parts[0];
-      const username = parts[1];
-      const deviceId = parts[2];
-
-      // Register device provisionally
-      const device: ConnectedDevice = {
-        clientId,
-        username,
-        customerId,
-        deviceId,
-        deviceInfo: {},
-        connectedAt: new Date(),
-        lastPing: new Date(),
-      };
-
-      connectedDevices.set(username, device);
+      const [customerId, username, deviceId] = parts;
+      connectedDevices.set(username, {
+        clientId, username, customerId, deviceId,
+        deviceInfo: {}, connectedAt: new Date(), lastPing: new Date(),
+      });
       clientToUsername.set(clientId, username);
-      log(`Device registered from client ID: ${username} (${deviceId})`, "mqtt");
     } else if (parts.length >= 2) {
-      // Fallback for old format: {customerid}/{deviceid}
-      const customerId = parts[0];
-      const deviceId = parts[1];
       clientToUsername.set(clientId, clientId);
     }
   });
 
-  // Handle client disconnect
   aedes.on("clientDisconnect", (client) => {
     if (!client || !client.id) return;
-
-    const clientId = client.id;
-    const username = clientToUsername.get(clientId);
-
+    const username = clientToUsername.get(client.id);
     if (username) {
       connectedDevices.delete(username);
-      clientToUsername.delete(clientId);
-      log(`MQTT client disconnected: ${clientId} (username: ${username})`, "mqtt");
-    } else {
-      log(`MQTT client disconnected: ${clientId}`, "mqtt");
+      clientToUsername.delete(client.id);
     }
   });
 
@@ -143,18 +110,10 @@ export function initMqttBroker(httpServer?: Server): Aedes {
     // Handle device status messages: client/status/android
     // Format: {cid}:{uid}---{json} OR {cid}:{uid}---disconnected
     if (topic === "client/status/android") {
-      if (payload.includes("---disconnected")) {
-        const parts = payload.replace("---disconnected", "").split(":");
-        if (parts.length >= 2) {
-          log(`Will message received: device ${parts[1]} disconnected`, "mqtt");
-        }
-      } else if (payload.includes("---{")) {
-        // Format: 2002:deviceid---{"appname":...}
+      if (payload.includes("---{")) {
         const jsonStart = payload.indexOf("---{") + 3;
-        const jsonPayload = payload.substring(jsonStart);
-        handleDeviceStatus(clientId, jsonPayload);
-      } else {
-        // Try parsing as pure JSON
+        handleDeviceStatus(clientId, payload.substring(jsonStart));
+      } else if (!payload.includes("---disconnected")) {
         handleDeviceStatus(clientId, payload);
       }
     }
@@ -164,71 +123,41 @@ export function initMqttBroker(httpServer?: Server): Aedes {
       handleDeviceStatus(clientId, payload);
     }
 
-    // Don't log system messages ($SYS topics) or empty payloads
-    if (!topic.startsWith("$") && payload) {
-      log(`MQTT publish on ${topic} from ${clientId}: ${payload.substring(0, 200)}`, "mqtt");
-    }
-
     // Check if this is a response to a pending command
-    // Response topic format: {cid}/{username}/{commandTopic}
     const topicParts = topic.split("/");
     if (topicParts.length === 3) {
-      const [cid, username, commandTopic] = topicParts;
+      const [, username, responseTopic] = topicParts;
+      // Map response topic to command topic if needed (e.g., appinfo -> getappinfo)
+      const commandTopic = RESPONSE_TOPIC_MAP[responseTopic] || responseTopic;
       const pendingKey = `${username}:${commandTopic}`;
       const pending = pendingResponses.get(pendingKey);
       if (pending) {
         clearTimeout(pending.timeout);
         pendingResponses.delete(pendingKey);
         pending.resolve(payload);
-        log(`Command response received for ${pendingKey}: ${payload.substring(0, 100)}`, "mqtt");
       }
     }
   });
 
-  // Handle subscriptions
-  aedes.on("subscribe", (subscriptions, client) => {
-    if (!client) return;
-    const topics = subscriptions.map((s) => s.topic).join(", ");
-    log(`MQTT client ${client.id} subscribed to: ${topics}`, "mqtt");
-  });
-
-  // Handle errors
-  aedes.on("clientError", (client, err) => {
-    log(`MQTT client error (${client?.id}): ${err.message}`, "mqtt");
-  });
-
-  log("MQTT broker initialized", "mqtt");
   return aedes;
 }
 
-// Handle device status message from Android app
-// Topic: client/status/android
-// Payload: { "msg": { "appname", "username", "ver", "uid", "cid", "ip", "agent", "package", "os_ver", "model", "time" } }
 function handleDeviceStatus(clientId: string, payload: string) {
   try {
     const data = JSON.parse(payload);
     const msg = data.msg || data;
-
     const username = msg.username || "";
-    const customerId = msg.cid || "";
-    const deviceId = msg.uid || "";
+    if (!username) return;
 
-    if (!username) {
-      log(`Device status missing username from ${clientId}`, "mqtt");
-      return;
-    }
-
-    // Remove old connection if exists with different clientId
     const existingDevice = connectedDevices.get(username);
     if (existingDevice && existingDevice.clientId !== clientId) {
       clientToUsername.delete(existingDevice.clientId);
     }
 
-    const device: ConnectedDevice = {
-      clientId,
-      username,
-      customerId,
-      deviceId,
+    connectedDevices.set(username, {
+      clientId, username,
+      customerId: msg.cid || "",
+      deviceId: msg.uid || "",
       deviceInfo: {
         appName: msg.appname || msg.package,
         version: msg.ver,
@@ -239,62 +168,35 @@ function handleDeviceStatus(clientId: string, payload: string) {
       },
       connectedAt: existingDevice?.connectedAt || new Date(),
       lastPing: new Date(),
-    };
-
-    connectedDevices.set(username, device);
+    });
     clientToUsername.set(clientId, username);
-
-    log(`Device registered via status: ${username} (${device.deviceInfo.model || "unknown"})`, "mqtt");
-  } catch (err) {
-    log(`Error parsing device status: ${err}`, "mqtt");
+  } catch {
+    // Ignore parse errors
   }
 }
 
-// Send command and wait for device response
 export function sendCommandAndWaitForResponse(
-  username: string,
-  command: string,
-  additionalData?: any,
-  timeoutMs: number = 10000
+  username: string, command: string, additionalData?: any, timeoutMs: number = 10000
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const device = connectedDevices.get(username);
-
     if (!device || !aedes) {
       reject(new Error(`Device ${username} not connected`));
       return;
     }
 
-    // Get the topic suffix for this command
     const topicSuffix = COMMAND_TO_TOPIC[command] || command;
     const pendingKey = `${username}:${topicSuffix}`;
-
-    // Set timeout
     const timeout = setTimeout(() => {
       pendingResponses.delete(pendingKey);
       reject(new Error(`Timeout waiting for response from ${username}`));
     }, timeoutMs);
 
-    // Register pending response
     pendingResponses.set(pendingKey, { resolve, reject, timeout });
 
-    // Send the command
     const topic = `${device.customerId}/${device.username}/${device.deviceId}/${topicSuffix}`;
-    const payload = JSON.stringify({
-      command,
-      username,
-      ...additionalData,
-    });
-
     aedes.publish(
-      {
-        topic,
-        payload: Buffer.from(payload),
-        qos: 1,
-        retain: false,
-        cmd: "publish",
-        dup: false,
-      },
+      { topic, payload: Buffer.from(JSON.stringify({ command, username, ...additionalData })), qos: 1, retain: false, cmd: "publish", dup: false },
       (err) => {
         if (err) {
           clearTimeout(timeout);
@@ -303,51 +205,19 @@ export function sendCommandAndWaitForResponse(
         }
       }
     );
-
-    log(`Command sent to ${username}, waiting for response...`, "mqtt");
   });
 }
 
-// Send command to a specific user
 export function sendCommandToUser(username: string, command: string, additionalData?: any): boolean {
   const device = connectedDevices.get(username);
+  if (!device || !aedes) return false;
 
-  if (!device || !aedes) {
-    log(`Cannot send command to ${username}: device not connected`, "mqtt");
-    return false;
-  }
-
-  // Get the topic suffix for this command
   const topicSuffix = COMMAND_TO_TOPIC[command] || command;
-
-  // Topic format: {customerid}/{username}/{did}/{command}
-  // App subscribes to: 2002/casafilippo/64463f7d-2682-3edc-a30e-1dd12732abf9/#
   const topic = `${device.customerId}/${device.username}/${device.deviceId}/${topicSuffix}`;
-
-  // Publish command
-  const payload = JSON.stringify({
-    command,
-    username,
-    ...additionalData,
-  });
-
   aedes.publish(
-    {
-      topic,
-      payload: Buffer.from(payload),
-      qos: 1,
-      retain: false,
-      cmd: "publish",
-      dup: false,
-    },
-    (err) => {
-      if (err) {
-        log(`Error publishing to ${topic}: ${err}`, "mqtt");
-      }
-    }
+    { topic, payload: Buffer.from(JSON.stringify({ command, username, ...additionalData })), qos: 1, retain: false, cmd: "publish", dup: false },
+    () => {}
   );
-
-  log(`Command sent to ${username} on topic ${topic}: ${command}`, "mqtt");
   return true;
 }
 
@@ -371,17 +241,11 @@ export function sendCommandToUsers(
   return { sent, failed };
 }
 
-// Send command to all connected devices
 export function sendCommandToAll(command: string, additionalData?: any): number {
   let count = 0;
-
-  connectedDevices.forEach((device, username) => {
-    if (sendCommandToUser(username, command, additionalData)) {
-      count++;
-    }
+  connectedDevices.forEach((_, username) => {
+    if (sendCommandToUser(username, command, additionalData)) count++;
   });
-
-  log(`Command broadcast to ${count} devices: ${command}`, "mqtt");
   return count;
 }
 
@@ -430,16 +294,12 @@ export const REMOTE_COMMANDS = {
 
 export type RemoteCommand = (typeof REMOTE_COMMANDS)[keyof typeof REMOTE_COMMANDS];
 
-// Cleanup function
 export function closeMqttBroker(): Promise<void> {
   return new Promise((resolve) => {
     if (mqttServer) {
       mqttServer.close(() => {
         if (aedes) {
-          aedes.close(() => {
-            log("MQTT broker closed", "mqtt");
-            resolve();
-          });
+          aedes.close(() => resolve());
         } else {
           resolve();
         }

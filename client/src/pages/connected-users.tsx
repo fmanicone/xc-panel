@@ -21,7 +21,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Send,
-  Radio,
   Settings,
   Lock,
   HardDrive,
@@ -301,27 +300,6 @@ export default function ConnectedUsersPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={sendingCommand}>
-                <Radio className="w-4 h-4 mr-2" />
-                Broadcast All
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Broadcast Command</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {REMOTE_COMMANDS.map((cmd) => (
-                <DropdownMenuItem
-                  key={cmd.id}
-                  onClick={() => openConfirmDialog(cmd, "all")}
-                >
-                  {cmd.icon}
-                  <span className="ml-2">{cmd.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button
             data-testid="button-refresh-users"
             onClick={() => loadData(true)}
