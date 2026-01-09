@@ -231,8 +231,9 @@ export function sendCommandToUser(username: string, command: string, additionalD
   // Get the topic suffix for this command
   const topicSuffix = COMMAND_TO_TOPIC[command] || command;
 
-  // Topic format: {customerid}/{did}/{command}
-  const topic = `${device.customerId}/${device.deviceId}/${topicSuffix}`;
+  // Topic format: {customerid}/{username}/{did}/{command}
+  // App subscribes to: 2002/casafilippo/64463f7d-2682-3edc-a30e-1dd12732abf9/#
+  const topic = `${device.customerId}/${device.username}/${device.deviceId}/${topicSuffix}`;
 
   // Publish command
   const payload = JSON.stringify({
