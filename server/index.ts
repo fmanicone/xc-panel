@@ -2,14 +2,14 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { initWebSocketServer } from "./websocket";
+import { initMqttBroker } from "./mqtt";
 
 const app = express();
 app.set('trust proxy', 'loopback');
 const httpServer = createServer(app);
 
-// Initialize WebSocket server for remote device commands
-initWebSocketServer(httpServer);
+// Initialize MQTT broker for remote device commands
+initMqttBroker(httpServer);
 
 declare module "http" {
   interface IncomingMessage {
