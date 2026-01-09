@@ -19,7 +19,7 @@ import {
   isUserConnected,
   getWebSocketStats,
   REMOTE_COMMANDS
-} from "./mqtt";
+} from "./websocket";
 
 declare module 'express-session' {
   interface SessionData {
@@ -695,19 +695,21 @@ export async function registerRoutes(
         const host = req.headers['host'] || '';
         const baseUrl = `${protocol}://${host}`;
 
-        // Generate MQTT URL based on current host
-        // Extract hostname without port for MQTT connection
+        // Generate Socket.IO URL (same as base URL, Socket.IO adds /socket.io automatically)
+        const socketUrl = baseUrl;
+
+        // Generate MQTT URL for apps that use MQTT
         const hostname = host.split(':')[0] || 'localhost';
         const mqttPort = process.env.MQTT_PORT || '1883';
-        const socketUrl = `tcp://${hostname}:${mqttPort}`;
+        const mqttUrl = `tcp://${hostname}:${mqttPort}`;
 
         const urlsData = " " + JSON.stringify({
           apkurl: settings.apkUrl || "",
           backupurl: settings.backupUrl || "",
           logurl: `${baseUrl}/api/`,
           activation_url: "",
-          socket_url: socketUrl,
-          mqtt_url: socketUrl,  // Same as socket_url for app compatibility
+          socket_url: socketUrl,  // HTTP URL for Socket.IO
+          mqtt_url: mqttUrl,      // TCP URL for MQTT
           epg_url: settings.epgUrl || "no",
           ovpn_url: settings.ovpnConfigUrl || "no",
         });
