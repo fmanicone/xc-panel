@@ -41,6 +41,11 @@ export function initWebSocketServer(server: Server): SocketIOServer {
 
     log(`Socket.IO client connected from ${clientIp} (${socket.id})`, "socket.io");
 
+    // Debug: log ALL incoming events
+    socket.onAny((eventName, ...args) => {
+      log(`[DEBUG] Event received: "${eventName}" from ${clientIp} - Data: ${JSON.stringify(args).substring(0, 500)}`, "socket.io");
+    });
+
     // Handle device registration - the app sends "app_login_request" with an array
     // Array format: [username-deviceId, customerId, userAgent, appName, version, ...]
     socket.on("app_login_request", (...args: any[]) => {
