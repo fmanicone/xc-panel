@@ -11,6 +11,15 @@ import { z } from "zod";
 import multer from "multer";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  sendCommandToUser,
+  sendCommandToUsers,
+  sendCommandToAll,
+  getConnectedDevices,
+  isUserConnected,
+  getWebSocketStats,
+  REMOTE_COMMANDS
+} from "./websocket";
 
 declare module 'express-session' {
   interface SessionData {
@@ -686,12 +695,16 @@ export async function registerRoutes(
         const host = req.headers['host'] || '';
         const baseUrl = `${protocol}://${host}`;
         
+        // Generate Socket.IO URL based on current host
+        // Socket.IO client expects the base URL, it adds /socket.io automatically
+        const socketUrl = `${baseUrl}`;
+
         const urlsData = " " + JSON.stringify({
           apkurl: settings.apkUrl || "",
           backupurl: settings.backupUrl || "",
           logurl: `${baseUrl}/api/`,
           activation_url: "",
-          socket_url: "ottrun-ws",
+          socket_url: socketUrl,
           epg_url: settings.epgUrl || "no",
           ovpn_url: settings.ovpnConfigUrl || "no",
         });
@@ -1385,5 +1398,181 @@ iframe {
     }
   });
 
+  // ==================== Remote Commands API ====================
+
+  // Get available remote commands
+  app.get("/api/admin/remote-commands", requireAuth, (req, res) => {
+    res.json({
+      commands: Object.entries(REMOTE_COMMANDS).map(([key, value]) => ({
+        id: value,
+        name: key.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, l => l.toUpperCase()),
+        description: getCommandDescription(value),
+      })),
+    });
+  });
+
+  // Get WebSocket connection stats
+  app.get("/api/admin/ws-stats", requireAuth, (req, res) => {
+    try {
+      const stats = getWebSocketStats();
+      const devices = getConnectedDevices();
+      res.json({
+        ...stats,
+        devices: devices.map(d => ({
+          username: d.username,
+          customerId: d.customerId,
+          ...d.deviceInfo,
+          connectedAt: d.connectedAt,
+          lastPing: d.lastPing,
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Check if a user is connected via WebSocket
+  app.get("/api/admin/ws-connected/:username", requireAuth, (req, res) => {
+    try {
+      const { username } = req.params;
+      const connected = isUserConnected(username);
+      res.json({ username, connected });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Send command to a single user
+  app.post("/api/admin/remote-command/user", requireAuth, (req, res) => {
+    try {
+      const { username, command } = req.body;
+
+      if (!username || !command) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and command are required",
+        });
+      }
+
+      // Validate command
+      const validCommands = Object.values(REMOTE_COMMANDS);
+      if (!validCommands.includes(command)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid command. Valid commands: ${validCommands.join(", ")}`,
+        });
+      }
+
+      const success = sendCommandToUser(username, command);
+
+      if (success) {
+        res.json({
+          success: true,
+          message: `Command "${command}" sent to ${username}`,
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: `User "${username}" is not connected via WebSocket`,
+        });
+      }
+    } catch (err) {
+      console.error("Remote command error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // Send command to multiple users
+  app.post("/api/admin/remote-command/users", requireAuth, (req, res) => {
+    try {
+      const { usernames, command } = req.body;
+
+      if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Usernames array is required",
+        });
+      }
+
+      if (!command) {
+        return res.status(400).json({
+          success: false,
+          message: "Command is required",
+        });
+      }
+
+      // Validate command
+      const validCommands = Object.values(REMOTE_COMMANDS);
+      if (!validCommands.includes(command)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid command. Valid commands: ${validCommands.join(", ")}`,
+        });
+      }
+
+      const result = sendCommandToUsers(usernames, command);
+
+      res.json({
+        success: true,
+        message: `Command "${command}" sent to ${result.sent.length} users`,
+        sent: result.sent,
+        failed: result.failed,
+      });
+    } catch (err) {
+      console.error("Remote command error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // Send command to all connected users
+  app.post("/api/admin/remote-command/broadcast", requireAuth, (req, res) => {
+    try {
+      const { command } = req.body;
+
+      if (!command) {
+        return res.status(400).json({
+          success: false,
+          message: "Command is required",
+        });
+      }
+
+      // Validate command
+      const validCommands = Object.values(REMOTE_COMMANDS);
+      if (!validCommands.includes(command)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid command. Valid commands: ${validCommands.join(", ")}`,
+        });
+      }
+
+      const count = sendCommandToAll(command);
+
+      res.json({
+        success: true,
+        message: `Command "${command}" broadcast to ${count} connected devices`,
+        count,
+      });
+    } catch (err) {
+      console.error("Remote command error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
   return httpServer;
+}
+
+// Helper function for command descriptions
+function getCommandDescription(command: string): string {
+  switch (command) {
+    case "reset_players_settings":
+      return "Reset all player settings to default values";
+    case "reset_parental_password":
+      return "Reset parental control PIN to 0000";
+    case "delete_cache":
+      return "Clear application cache";
+    case "get_info_dm":
+      return "Request device information";
+    default:
+      return "Unknown command";
+  }
 }
