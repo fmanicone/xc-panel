@@ -125,18 +125,27 @@ export function initMqttBroker(httpServer?: Server): Aedes {
     const clientId = client?.id || "broker";
 
     // Handle device status messages: client/status/android
+    // Format: {cid}:{uid}---{json} OR {cid}:{uid}---disconnected
     if (topic === "client/status/android") {
-      // Check if this is a Will Message (disconnection notification)
-      // Format: {customerid}:{deviceid}---disconnected
       if (payload.includes("---disconnected")) {
         const parts = payload.replace("---disconnected", "").split(":");
         if (parts.length >= 2) {
           log(`Will message received: device ${parts[1]} disconnected`, "mqtt");
         }
+      } else if (payload.includes("---{")) {
+        // Format: 2002:deviceid---{"appname":...}
+        const jsonStart = payload.indexOf("---{") + 3;
+        const jsonPayload = payload.substring(jsonStart);
+        handleDeviceStatus(clientId, jsonPayload);
       } else {
-        // Regular status message with JSON payload
+        // Try parsing as pure JSON
         handleDeviceStatus(clientId, payload);
       }
+    }
+
+    // Handle OTTRUN/connectionslogs - also contains device info
+    if (topic === "OTTRUN/connectionslogs") {
+      handleDeviceStatus(clientId, payload);
     }
 
     // Don't log system messages ($SYS topics) or empty payloads
