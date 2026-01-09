@@ -22,7 +22,18 @@ const connectedDevices = new Map<string, ConnectedDevice>();
 // Map of socket.id -> username for quick lookup
 const socketToUsername = new Map<string, string>();
 
+// Pending command responses - waiting for device to respond
+interface PendingResponse {
+  resolve: (response: string) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+}
+const pendingResponses = new Map<string, PendingResponse>();
+
 let io: SocketIOServer | null = null;
+
+// Room for admin web clients to receive command responses
+const ADMIN_ROOM = "admin_clients";
 
 export function initWebSocketServer(server: Server): SocketIOServer {
   io = new SocketIOServer(server, {
@@ -72,6 +83,23 @@ export function initWebSocketServer(server: Server): SocketIOServer {
       }
     });
 
+    // Handle command response from device
+    socket.on("command_response", (data: any) => {
+      const username = socketToUsername.get(socket.id);
+      if (username) {
+        const response = typeof data === "string" ? data : (data?.message || data?.response || JSON.stringify(data));
+        log(`Command response from ${username}: ${response}`, "socket.io");
+
+        // Check if there's a pending response for this user
+        const pending = pendingResponses.get(username);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          pendingResponses.delete(username);
+          pending.resolve(response);
+        }
+      }
+    });
+
     // Handle disconnect
     socket.on("disconnect", (reason) => {
       const username = socketToUsername.get(socket.id);
@@ -84,6 +112,12 @@ export function initWebSocketServer(server: Server): SocketIOServer {
 
     socket.on("error", (err) => {
       log(`Socket.IO error: ${err.message}`, "socket.io");
+    });
+
+    // Allow admin web clients to join the admin room to receive command responses
+    socket.on("join_admin", () => {
+      socket.join(ADMIN_ROOM);
+      log(`Admin client joined: ${socket.id}`, "socket.io");
     });
   });
 
@@ -192,6 +226,45 @@ const SOCKET_COMMAND_MAP: Record<string, string> = {
   get_info_dm: "get_info",
 };
 
+// Send command and wait for device response
+export function sendCommandAndWaitForResponse(
+  username: string,
+  command: string,
+  additionalData?: any,
+  timeoutMs: number = 10000
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const device = connectedDevices.get(username);
+
+    if (!device || !device.socket.connected) {
+      reject(new Error(`Device ${username} not connected`));
+      return;
+    }
+
+    // Set timeout
+    const timeout = setTimeout(() => {
+      pendingResponses.delete(username);
+      reject(new Error(`Timeout waiting for response from ${username}`));
+    }, timeoutMs);
+
+    // Register pending response
+    pendingResponses.set(username, { resolve, reject, timeout });
+
+    // Map command name if needed
+    const mappedCommand = SOCKET_COMMAND_MAP[command] || command;
+
+    // Send command
+    const message = {
+      username: device.customerId || username,
+      message: mappedCommand,
+      ...additionalData,
+    };
+
+    device.socket.emit("message_response", message);
+    log(`Command sent to ${username}, waiting for response...`, "socket.io");
+  });
+}
+
 // Send command to a specific user
 export function sendCommandToUser(username: string, command: string, additionalData?: any): boolean {
   const device = connectedDevices.get(username);
@@ -294,6 +367,14 @@ export function getWebSocketStats(): { total: number; connected: number } {
 // Get the Socket.IO server instance
 export function getIO(): SocketIOServer | null {
   return io;
+}
+
+// Send command response to all admin web clients
+export function broadcastToAdmins(event: string, data: any): void {
+  if (io) {
+    io.to(ADMIN_ROOM).emit(event, data);
+    log(`Broadcast to admins: ${event} - ${JSON.stringify(data).substring(0, 100)}`, "socket.io");
+  }
 }
 
 // Available remote commands

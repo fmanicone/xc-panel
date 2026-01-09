@@ -29,6 +29,14 @@ const clientToUsername = new Map<string, string>();
 let aedes: Aedes | null = null;
 let mqttServer: NetServer | null = null;
 
+// Pending command responses - waiting for device to respond
+interface PendingResponse {
+  resolve: (response: string) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+}
+const pendingResponses = new Map<string, PendingResponse>();
+
 // Mapping comandi xc-panel -> topic MQTT (suffisso)
 const COMMAND_TO_TOPIC: Record<string, string> = {
   reset_players_settings: "resetplayer",
@@ -160,6 +168,21 @@ export function initMqttBroker(httpServer?: Server): Aedes {
     if (!topic.startsWith("$") && payload) {
       log(`MQTT publish on ${topic} from ${clientId}: ${payload.substring(0, 200)}`, "mqtt");
     }
+
+    // Check if this is a response to a pending command
+    // Response topic format: {cid}/{username}/{commandTopic}
+    const topicParts = topic.split("/");
+    if (topicParts.length === 3) {
+      const [cid, username, commandTopic] = topicParts;
+      const pendingKey = `${username}:${commandTopic}`;
+      const pending = pendingResponses.get(pendingKey);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        pendingResponses.delete(pendingKey);
+        pending.resolve(payload);
+        log(`Command response received for ${pendingKey}: ${payload.substring(0, 100)}`, "mqtt");
+      }
+    }
   });
 
   // Handle subscriptions
@@ -225,6 +248,64 @@ function handleDeviceStatus(clientId: string, payload: string) {
   } catch (err) {
     log(`Error parsing device status: ${err}`, "mqtt");
   }
+}
+
+// Send command and wait for device response
+export function sendCommandAndWaitForResponse(
+  username: string,
+  command: string,
+  additionalData?: any,
+  timeoutMs: number = 10000
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const device = connectedDevices.get(username);
+
+    if (!device || !aedes) {
+      reject(new Error(`Device ${username} not connected`));
+      return;
+    }
+
+    // Get the topic suffix for this command
+    const topicSuffix = COMMAND_TO_TOPIC[command] || command;
+    const pendingKey = `${username}:${topicSuffix}`;
+
+    // Set timeout
+    const timeout = setTimeout(() => {
+      pendingResponses.delete(pendingKey);
+      reject(new Error(`Timeout waiting for response from ${username}`));
+    }, timeoutMs);
+
+    // Register pending response
+    pendingResponses.set(pendingKey, { resolve, reject, timeout });
+
+    // Send the command
+    const topic = `${device.customerId}/${device.username}/${device.deviceId}/${topicSuffix}`;
+    const payload = JSON.stringify({
+      command,
+      username,
+      ...additionalData,
+    });
+
+    aedes.publish(
+      {
+        topic,
+        payload: Buffer.from(payload),
+        qos: 1,
+        retain: false,
+        cmd: "publish",
+        dup: false,
+      },
+      (err) => {
+        if (err) {
+          clearTimeout(timeout);
+          pendingResponses.delete(pendingKey);
+          reject(new Error(`Failed to send command: ${err.message}`));
+        }
+      }
+    );
+
+    log(`Command sent to ${username}, waiting for response...`, "mqtt");
+  });
 }
 
 // Send command to a specific user

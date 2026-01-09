@@ -15,6 +15,7 @@ import {
   sendCommandToUser,
   sendCommandToUsers,
   sendCommandToAll,
+  sendCommandAndWaitForResponse,
   getConnectedDevices,
   isUserConnected,
   getWebSocketStats,
@@ -1451,7 +1452,7 @@ iframe {
   });
 
   // Send command to a single user
-  app.post("/api/admin/remote-command/user", requireAuth, (req, res) => {
+  app.post("/api/admin/remote-command/user", requireAuth, async (req, res) => {
     try {
       const { username, command } = req.body;
 
@@ -1471,17 +1472,17 @@ iframe {
         });
       }
 
-      const success = sendCommandToUser(username, command);
-
-      if (success) {
+      try {
+        // Wait for device response (timeout 10 seconds)
+        const deviceResponse = await sendCommandAndWaitForResponse(username, command, undefined, 10000);
         res.json({
           success: true,
-          message: `Command "${command}" sent to ${username}`,
+          message: deviceResponse,
         });
-      } else {
+      } catch (err: any) {
         res.status(404).json({
           success: false,
-          message: `User "${username}" is not connected via WebSocket`,
+          message: err.message || `User "${username}" is not connected`,
         });
       }
     } catch (err) {

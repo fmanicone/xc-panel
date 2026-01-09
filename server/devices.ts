@@ -3,6 +3,28 @@ import * as websocket from "./websocket";
 import * as mqtt from "./mqtt";
 import { log } from "./index";
 
+// Send command and wait for device response
+export async function sendCommandAndWaitForResponse(
+  username: string,
+  command: string,
+  additionalData?: any,
+  timeoutMs: number = 10000
+): Promise<string> {
+  // Try Socket.IO first
+  if (websocket.isUserConnected(username)) {
+    log(`Sending command via Socket.IO to ${username} and waiting for response`, "devices");
+    return websocket.sendCommandAndWaitForResponse(username, command, additionalData, timeoutMs);
+  }
+
+  // Try MQTT
+  if (mqtt.isUserConnected(username)) {
+    log(`Sending command via MQTT to ${username} and waiting for response`, "devices");
+    return mqtt.sendCommandAndWaitForResponse(username, command, additionalData, timeoutMs);
+  }
+
+  throw new Error(`Device ${username} not connected`);
+}
+
 // Send command to a specific user (tries both Socket.IO and MQTT)
 export function sendCommandToUser(username: string, command: string, additionalData?: any): boolean {
   // Try Socket.IO first
