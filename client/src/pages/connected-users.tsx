@@ -57,6 +57,12 @@ interface RemoteCommand {
 
 const REMOTE_COMMANDS: RemoteCommand[] = [
   {
+    id: "restart_app",
+    name: "Restart App",
+    description: "Restart the application on the device",
+    icon: <RefreshCw className="w-4 h-4" />,
+  },
+  {
     id: "reset_players_settings",
     name: "Reset Player Settings",
     description: "Reset all player settings to default values",
@@ -441,21 +447,18 @@ export default function ConnectedUsersPage() {
                   <TableHead>IP Address</TableHead>
                   <TableHead>Online</TableHead>
                   <TableHead>Last Online</TableHead>
-                  <TableHead>App ID</TableHead>
                   <TableHead>Version</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>Package Name</TableHead>
                   <TableHead>App Name</TableHead>
-                  <TableHead>Customer ID</TableHead>
                   <TableHead>First Registered</TableHead>
-                  <TableHead>Last Connection</TableHead>
                   <TableHead className="w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-12">
+                    <TableCell colSpan={11} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2">
                         <Users className="w-10 h-10 text-muted-foreground/50" />
                         <p className="text-muted-foreground">
@@ -515,13 +518,12 @@ export default function ConnectedUsersPage() {
                           </p>
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm">{u.appId || "-"}</p>
+                          <p className="text-sm">{u.version || u.ver || "-"}</p>
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm">{u.version || "-"}</p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">{u.deviceName || "-"}</p>
+                          <p className="text-sm text-xs max-w-xs truncate" title={u.agent || u.deviceName || "-"}>
+                            {u.agent || u.deviceName || "-"}
+                          </p>
                         </TableCell>
                         <TableCell>
                           <p className="text-sm">{u.packageName || "-"}</p>
@@ -530,19 +532,9 @@ export default function ConnectedUsersPage() {
                           <p className="text-sm">{u.appName || "-"}</p>
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm">{u.customerId || "-"}</p>
-                        </TableCell>
-                        <TableCell>
                           <p className="text-sm">
                             {u.firstRegistered
                               ? new Date(u.firstRegistered).toLocaleString()
-                              : "-"}
-                          </p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">
-                            {u.lastConnection
-                              ? new Date(u.lastConnection).toLocaleString()
                               : "-"}
                           </p>
                         </TableCell>
