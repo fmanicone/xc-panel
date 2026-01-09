@@ -707,6 +707,7 @@ export async function registerRoutes(
           logurl: `${baseUrl}/api/`,
           activation_url: "",
           socket_url: socketUrl,
+          mqtt_url: socketUrl,  // Same as socket_url for app compatibility
           epg_url: settings.epgUrl || "no",
           ovpn_url: settings.ovpnConfigUrl || "no",
         });
