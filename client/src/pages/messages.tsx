@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getMessages, createMessage, deleteMessage, updateMessage } from "@/lib/api";
 import type { Message } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, MessageSquare, User, Loader2, Search, Pencil } from "lucide-react";
+import { Plus, Trash2, MessageSquare, User, Loader2, Search, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function MessagesPage() {
   const { toast } = useToast();
@@ -24,6 +24,8 @@ export default function MessagesPage() {
   const [searchUsername, setSearchUsername] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   const [form, setForm] = useState({
     message: "",
     userId: "",
@@ -42,6 +44,17 @@ export default function MessagesPage() {
     const matchesStatus = filterStatus === "all" || msg.status === filterStatus;
     return matchesUsername && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredMessages.length / itemsPerPage);
+  const paginatedMessages = filteredMessages.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchUsername, filterStatus]);
 
   useEffect(() => {
     loadMessages();
@@ -221,7 +234,7 @@ export default function MessagesPage() {
         </Select>
       </div>
 
-      {filteredMessages.length === 0 ? (
+      {paginatedMessages.length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="flex flex-col items-center gap-4 text-center">
@@ -237,7 +250,7 @@ export default function MessagesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredMessages.map((msg) => (
+          {paginatedMessages.map((msg) => (
             <Card key={msg.id} data-testid={`card-message-${msg.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -286,6 +299,37 @@ export default function MessagesPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredMessages.length)} of {filteredMessages.length} messages
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground px-2">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
         </div>
       )}
 
