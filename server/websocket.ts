@@ -187,6 +187,11 @@ function registerDevice(socket: Socket, data: {
   log(`Device registered: ${username} (${deviceName || appName || "unknown"}) from ${clientIp}`, "socket.io");
 }
 
+// Command mapping for Socket.IO app compatibility
+const SOCKET_COMMAND_MAP: Record<string, string> = {
+  get_info_dm: "get_info",
+};
+
 // Send command to a specific user
 export function sendCommandToUser(username: string, command: string, additionalData?: any): boolean {
   const device = connectedDevices.get(username);
@@ -196,16 +201,20 @@ export function sendCommandToUser(username: string, command: string, additionalD
     return false;
   }
 
+  // Map command name if needed (e.g., get_info_dm -> get_info)
+  const mappedCommand = SOCKET_COMMAND_MAP[command] || command;
+
   // Format message as the Android app expects it
+  // App validates username field against its stored customerId
   const message = {
-    username,
-    message: command,
+    username: device.customerId || username,
+    message: mappedCommand,
     ...additionalData,
   };
 
   device.socket.emit("message_response", message);
 
-  log(`Command sent to ${username}: ${command}`, "socket.io");
+  log(`Command sent to ${username}: ${mappedCommand}`, "socket.io");
   return true;
 }
 
@@ -229,11 +238,14 @@ export function sendCommandToUsers(usernames: string[], command: string, additio
 export function sendCommandToAll(command: string, additionalData?: any): number {
   let count = 0;
 
+  // Map command name if needed
+  const mappedCommand = SOCKET_COMMAND_MAP[command] || command;
+
   connectedDevices.forEach((device, username) => {
     if (device.socket.connected) {
       const message = {
-        username,
-        message: command,
+        username: device.customerId || username,
+        message: mappedCommand,
         ...additionalData,
       };
       device.socket.emit("message_response", message);
@@ -241,7 +253,7 @@ export function sendCommandToAll(command: string, additionalData?: any): number 
     }
   });
 
-  log(`Command broadcast to ${count} devices: ${command}`, "socket.io");
+  log(`Command broadcast to ${count} devices: ${mappedCommand}`, "socket.io");
   return count;
 }
 

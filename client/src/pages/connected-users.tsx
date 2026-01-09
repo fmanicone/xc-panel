@@ -451,14 +451,13 @@ export default function ConnectedUsersPage() {
                   <TableHead>Device</TableHead>
                   <TableHead>Package Name</TableHead>
                   <TableHead>App Name</TableHead>
-                  <TableHead>First Registered</TableHead>
                   <TableHead className="w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-12">
+                    <TableCell colSpan={10} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2">
                         <Users className="w-10 h-10 text-muted-foreground/50" />
                         <p className="text-muted-foreground">
@@ -530,13 +529,6 @@ export default function ConnectedUsersPage() {
                         </TableCell>
                         <TableCell>
                           <p className="text-sm">{u.appName || "-"}</p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">
-                            {u.firstRegistered
-                              ? new Date(u.firstRegistered).toLocaleString()
-                              : "-"}
-                          </p>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
