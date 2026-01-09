@@ -2,6 +2,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import express from "express";
 import session from "express-session";
+import Database from "better-sqlite3";
+import SqliteStore from "better-sqlite3-session-store";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { storage } from "./storage";
@@ -11,6 +13,9 @@ import { z } from "zod";
 import multer from "multer";
 import * as fs from "fs";
 import * as path from "path";
+
+const SessionStore = SqliteStore(session);
+const sessionDb = new Database(path.join(process.cwd(), "data", "sessions.db"));
 import {
   sendCommandToUser,
   sendCommandToUsers,
@@ -104,12 +109,9 @@ const vpnServerSchema = z.object({
 });
 
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  console.log(`[auth] Request to ${req.path} - session:`, req.session);
   if (!req.session.userId) {
-    console.log(`[auth] Unauthorized request to ${req.path} from ${req.ip}`);
     return res.status(401).json({ message: "Unauthorized" });
   }
-  console.log(`[auth] Authorized user ${req.session.userId} for ${req.path}`);
   next();
 };
 
@@ -119,13 +121,17 @@ export async function registerRoutes(
 ): Promise<Server> {
   
   app.use(session({
+    store: new SessionStore({
+      client: sessionDb,
+      expired: { clear: true, intervalMs: 900000 }
+    }),
     secret: process.env.SESSION_SECRET || 'iptv-admin-secret-key-2024',
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: false,
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 giorni
     },
   }));
 
@@ -709,7 +715,7 @@ export async function registerRoutes(
 
         const urlsData = " " + JSON.stringify({
           apkurl: settings.apkUrl || "",
-          backupurl: settings.backupUrl || "",
+          backupurl: `${baseUrl}/api/`,
           logurl: `${baseUrl}/api/`,
           activation_url: "",
           socket_url: socketUrl,  // HTTP URL for Socket.IO
@@ -1061,7 +1067,6 @@ iframe {
         versionCode: settings?.versionCode || "2001",
         apkAutoUpdate: settings?.apkAutoUpdate || "yes",
         apkUrl: settings?.apkUrl || "",
-        backupUrl: settings?.backupUrl || "",
       });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
@@ -1070,12 +1075,11 @@ iframe {
 
   app.put("/api/admin/update-settings", (req, res) => {
     try {
-      const { versionCode, apkAutoUpdate, apkUrl, backupUrl } = req.body;
+      const { versionCode, apkAutoUpdate, apkUrl } = req.body;
       storage.updateSettings({
         versionCode,
         apkAutoUpdate,
         apkUrl,
-        backupUrl,
       });
       res.json({ success: true });
     } catch (err) {

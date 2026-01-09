@@ -13,7 +13,6 @@ interface UpdateSettings {
   versionCode: string;
   apkAutoUpdate: string;
   apkUrl: string;
-  backupUrl: string;
 }
 
 export default function RemoteUpdate() {
@@ -22,7 +21,6 @@ export default function RemoteUpdate() {
     versionCode: "",
     apkAutoUpdate: "yes",
     apkUrl: "",
-    backupUrl: "",
   });
 
   const { data: settings, isLoading } = useQuery<UpdateSettings>({
@@ -101,16 +99,6 @@ export default function RemoteUpdate() {
               value={form.apkUrl}
               onChange={(e) => setForm({ ...form, apkUrl: e.target.value })}
               placeholder="https://example.com/app.apk"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Application Backup URL (direct link)</Label>
-            <Input
-              data-testid="input-backup-url"
-              value={form.backupUrl}
-              onChange={(e) => setForm({ ...form, backupUrl: e.target.value })}
-              placeholder="https://example.com/backup.apk"
             />
           </div>
 
