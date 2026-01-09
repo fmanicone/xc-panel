@@ -103,9 +103,12 @@ const vpnServerSchema = z.object({
 });
 
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  console.log(`[auth] Request to ${req.path} - session:`, req.session);
   if (!req.session.userId) {
+    console.log(`[auth] Unauthorized request to ${req.path} from ${req.ip}`);
     return res.status(401).json({ message: "Unauthorized" });
   }
+  console.log(`[auth] Authorized user ${req.session.userId} for ${req.path}`);
   next();
 };
 
