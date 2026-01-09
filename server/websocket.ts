@@ -27,8 +27,18 @@ interface PendingResponse {
   resolve: (response: string) => void;
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
+  command: string; // The command we're waiting response for
 }
 const pendingResponses = new Map<string, PendingResponse>();
+
+// Commands that devices respond to (device echoes the command name as event)
+const RESPONSE_EVENTS = new Set([
+  "get_info_dm", "get_info",
+  "reset_players_settings", "resetplayer",
+  "reset_parental_password", "parentalpass",
+  "delete_cache", "deletedcache",
+  "restart_app", "restartapp",
+]);
 
 let io: SocketIOServer | null = null;
 
@@ -52,9 +62,34 @@ export function initWebSocketServer(server: Server): SocketIOServer {
 
     log(`Socket.IO client connected from ${clientIp} (${socket.id})`, "socket.io");
 
-    // Debug: log ALL incoming events
+    // Debug: log ALL incoming events and check for command responses
     socket.onAny((eventName, ...args) => {
       log(`[DEBUG] Event received: "${eventName}" from ${clientIp} - Data: ${JSON.stringify(args).substring(0, 500)}`, "socket.io");
+
+      // Check if this is a response to a pending command
+      if (RESPONSE_EVENTS.has(eventName)) {
+        const username = socketToUsername.get(socket.id);
+        if (username) {
+          const pending = pendingResponses.get(username);
+          if (pending) {
+            // Extract response message from the data
+            const data = args[0];
+            let response: string;
+            if (typeof data === "string") {
+              response = data;
+            } else if (data?.msg) {
+              response = JSON.stringify(data.msg);
+            } else {
+              response = JSON.stringify(data);
+            }
+
+            clearTimeout(pending.timeout);
+            pendingResponses.delete(username);
+            pending.resolve(response);
+            log(`Command response received for ${username}: ${response.substring(0, 100)}`, "socket.io");
+          }
+        }
+      }
     });
 
     // Handle device registration - the app sends "app_login_request" with an array
@@ -79,23 +114,6 @@ export function initWebSocketServer(server: Server): SocketIOServer {
         const device = connectedDevices.get(username);
         if (device) {
           device.lastPing = new Date();
-        }
-      }
-    });
-
-    // Handle command response from device
-    socket.on("command_response", (data: any) => {
-      const username = socketToUsername.get(socket.id);
-      if (username) {
-        const response = typeof data === "string" ? data : (data?.message || data?.response || JSON.stringify(data));
-        log(`Command response from ${username}: ${response}`, "socket.io");
-
-        // Check if there's a pending response for this user
-        const pending = pendingResponses.get(username);
-        if (pending) {
-          clearTimeout(pending.timeout);
-          pendingResponses.delete(username);
-          pending.resolve(response);
         }
       }
     });
@@ -241,17 +259,17 @@ export function sendCommandAndWaitForResponse(
       return;
     }
 
+    // Map command name if needed
+    const mappedCommand = SOCKET_COMMAND_MAP[command] || command;
+
     // Set timeout
     const timeout = setTimeout(() => {
       pendingResponses.delete(username);
       reject(new Error(`Timeout waiting for response from ${username}`));
     }, timeoutMs);
 
-    // Register pending response
-    pendingResponses.set(username, { resolve, reject, timeout });
-
-    // Map command name if needed
-    const mappedCommand = SOCKET_COMMAND_MAP[command] || command;
+    // Register pending response with the command we're waiting for
+    pendingResponses.set(username, { resolve, reject, timeout, command: mappedCommand });
 
     // Send command
     const message = {
@@ -261,7 +279,7 @@ export function sendCommandAndWaitForResponse(
     };
 
     device.socket.emit("message_response", message);
-    log(`Command sent to ${username}, waiting for response...`, "socket.io");
+    log(`Command sent to ${username} (${mappedCommand}), waiting for response...`, "socket.io");
   });
 }
 
