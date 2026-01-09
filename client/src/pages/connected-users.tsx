@@ -443,7 +443,6 @@ export default function ConnectedUsersPage() {
                   <TableHead>Connection</TableHead>
                   <TableHead>Last Online</TableHead>
                   <TableHead>Version</TableHead>
-                  <TableHead>Device</TableHead>
                   <TableHead>Package Name</TableHead>
                   <TableHead>App Name</TableHead>
                   <TableHead className="w-32">Actions</TableHead>
@@ -452,7 +451,7 @@ export default function ConnectedUsersPage() {
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-12">
+                    <TableCell colSpan={10} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2">
                         <Users className="w-10 h-10 text-muted-foreground/50" />
                         <p className="text-muted-foreground">
@@ -531,12 +530,9 @@ export default function ConnectedUsersPage() {
                           <p className="text-sm">{u.version || u.ver || "-"}</p>
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm text-xs max-w-xs truncate" title={u.agent || u.deviceName || "-"}>
-                            {u.agent || u.deviceName || "-"}
+                          <p className="text-sm max-w-[140px] truncate" title={u.packageName || "-"}>
+                            {u.packageName ? u.packageName.substring(0, 20) : "-"}
                           </p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">{u.packageName || "-"}</p>
                         </TableCell>
                         <TableCell>
                           <p className="text-sm">{u.appName || "-"}</p>
