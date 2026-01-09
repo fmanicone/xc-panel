@@ -638,7 +638,8 @@ export async function registerRoutes(
           api_ver: "1.0v",
           vpnconfigs,
         });
-        
+
+        console.log("[ApiIPTV] Response (unencoded) for vpnconfigV2:", output);
         return res.send(encryptAES(output));
       }
 
@@ -786,20 +787,20 @@ export async function registerRoutes(
           "VLC": "VLC",
         };
 
-        return res.json({
+        const unencodedResponse = {
           success: "1",
           status: "ACTIVE",
           cid: customerId,
           which: tag,
-          app: encode(appData, key2 + "app"),
-          portal: encode(portalData, key2 + "portal"),
-          urls: encode(urlsData, key2 + "urls"),
+          app: appData.trim(),
+          portal: portalData.trim(),
+          urls: urlsData.trim(),
           support: {
             support_email: settings.supportEmail || "",
             support_phone: settings.supportPhone || "",
           },
-          button: encode(buttonData, key2 + "buttons"),
-          settings: encode(settingsData, key2 + "sett"),
+          button: buttonData.trim(),
+          settings: settingsData.trim(),
           admobconfig: {
             admob_enabled: "no",
           },
@@ -849,6 +850,17 @@ export async function registerRoutes(
             mnt_status: settings.maintenanceMode === "ACTIVE" ? "ACTIVE" : "INACTIVE",
             mnt_expire: (settings as any).maintenanceExpire || "2025-12-31 23:59:00",
           },
+        };
+
+        console.log("[ApiIPTV] Response (unencoded) for", tag + ":", JSON.stringify(unencodedResponse, null, 2));
+
+        return res.json({
+          ...unencodedResponse,
+          app: encode(appData, key2 + "app"),
+          portal: encode(portalData, key2 + "portal"),
+          urls: encode(urlsData, key2 + "urls"),
+          button: encode(buttonData, key2 + "buttons"),
+          settings: encode(settingsData, key2 + "sett"),
         });
       }
 
