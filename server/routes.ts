@@ -19,7 +19,7 @@ import {
   isUserConnected,
   getWebSocketStats,
   REMOTE_COMMANDS
-} from "./websocket";
+} from "./devices";
 
 declare module 'express-session' {
   interface SessionData {
