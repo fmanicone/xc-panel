@@ -91,6 +91,7 @@ export default function ConnectedUsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<ConnectedUser[]>([]);
   const [stats, setStats] = useState({ total: 0, online: 0 });
+  const [realtimeDevices, setRealtimeDevices] = useState<Map<string, { protocol: string; connectedAt: string }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,12 +141,27 @@ export default function ConnectedUsersPage() {
   async function loadData(isRefresh = false) {
     if (isRefresh) setRefreshing(true);
     try {
-      const [usersData, statsData] = await Promise.all([
+      const [usersData, statsData, wsStatsRes] = await Promise.all([
         getConnectedUsers(),
         getConnectedUsersStats(),
+        fetch("/api/admin/ws-stats", { credentials: "include" }).then(r => r.json()),
       ]);
       setUsers(usersData);
       setStats(statsData);
+
+      // Build map of username -> protocol from real-time connected devices
+      const deviceMap = new Map<string, { protocol: string; connectedAt: string }>();
+      if (wsStatsRes.devices && Array.isArray(wsStatsRes.devices)) {
+        wsStatsRes.devices.forEach((d: any) => {
+          if (d.username) {
+            deviceMap.set(d.username, {
+              protocol: d.protocol || "unknown",
+              connectedAt: d.connectedAt,
+            });
+          }
+        });
+      }
+      setRealtimeDevices(deviceMap);
     } catch (err) {
       toast({
         title: "Error",
@@ -424,6 +440,7 @@ export default function ConnectedUsersPage() {
                   <TableHead>User ID</TableHead>
                   <TableHead>IP Address</TableHead>
                   <TableHead>Online</TableHead>
+                  <TableHead>Connection</TableHead>
                   <TableHead>Last Online</TableHead>
                   <TableHead>Version</TableHead>
                   <TableHead>Device</TableHead>
@@ -435,7 +452,7 @@ export default function ConnectedUsersPage() {
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12">
+                    <TableCell colSpan={11} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2">
                         <Users className="w-10 h-10 text-muted-foreground/50" />
                         <p className="text-muted-foreground">
@@ -485,6 +502,22 @@ export default function ConnectedUsersPage() {
                             </Badge>
                           ) : (
                             <Badge variant="secondary">Offline</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {realtimeDevices.has(username) ? (
+                            <Badge
+                              variant="outline"
+                              className={
+                                realtimeDevices.get(username)?.protocol === "mqtt"
+                                  ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                  : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                              }
+                            >
+                              {realtimeDevices.get(username)?.protocol === "mqtt" ? "MQTT" : "Socket.IO"}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
                           )}
                         </TableCell>
                         <TableCell>

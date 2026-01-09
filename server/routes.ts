@@ -1437,6 +1437,7 @@ iframe {
           ...d.deviceInfo,
           connectedAt: d.connectedAt,
           lastPing: d.lastPing,
+          protocol: d.protocol,
         })),
       });
     } catch (err) {
