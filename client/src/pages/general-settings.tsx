@@ -321,14 +321,6 @@ export default function GeneralSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>EPG URL</Label>
-                  <Input
-                    value={settings.epgUrl || ""}
-                    onChange={(e) => setSettings({ ...settings, epgUrl: e.target.value })}
-                    placeholder="http://example.com/epg.xml"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label>Stream Format</Label>
                   <Select
                     value={settings.streamFormat || "ts"}
@@ -429,6 +421,16 @@ export default function GeneralSettings() {
                   <Switch
                     checked={settings.showCategoryCount === "Enabled"}
                     onCheckedChange={(v) => setSettings({ ...settings, showCategoryCount: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>EPG</Label>
+                    <p className="text-xs text-muted-foreground">Enable screen EPG in live</p>
+                  </div>
+                  <Switch
+                    checked={settings.epgUrl === "yes"}
+                    onCheckedChange={(v) => setSettings({ ...settings, epgUrl: v ? "yes" : "no" })}
                   />
                 </div>
               </CardContent>

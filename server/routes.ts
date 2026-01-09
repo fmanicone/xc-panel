@@ -638,7 +638,7 @@ export async function registerRoutes(
           api_ver: "1.0v",
           vpnconfigs,
         });
-        
+
         return res.send(encryptAES(output));
       }
 
