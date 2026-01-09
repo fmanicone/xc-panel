@@ -693,13 +693,13 @@ export async function registerRoutes(
 
         const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
         const host = req.headers['host'] || '';
+        const hostname = host.split(':')[0] || 'localhost';
         const baseUrl = `${protocol}://${host}`;
 
-        // Generate Socket.IO URL (same as base URL, Socket.IO adds /socket.io automatically)
-        const socketUrl = baseUrl;
+        // Generate Socket.IO URL (without port)
+        const socketUrl = `${protocol}://${hostname}`;
 
         // Generate MQTT URL for apps that use MQTT
-        const hostname = host.split(':')[0] || 'localhost';
         const mqttPort = process.env.MQTT_PORT || '1883';
         const mqttUrl = `tcp://${hostname}:${mqttPort}`;
 
