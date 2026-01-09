@@ -78,16 +78,18 @@ export function initMqttBroker(httpServer?: Server): Aedes {
     const clientId = client.id;
     log(`MQTT client connected: ${clientId}`, "mqtt");
 
-    // Client ID format from Android app: {customerid}/{did}
+    // Client ID format from Android app: {customerid}/{username}/{deviceid}
+    // Example: 2002/rifinovec/ed9cf67a-9e5f-3f09-87c4-65439b34a9a7
     const parts = clientId.split("/");
-    if (parts.length >= 2) {
+    if (parts.length >= 3) {
       const customerId = parts[0];
-      const deviceId = parts[1];
+      const username = parts[1];
+      const deviceId = parts[2];
 
-      // Register device provisionally (will be updated with full info on status publish)
+      // Register device provisionally
       const device: ConnectedDevice = {
         clientId,
-        username: "", // Will be set when we receive status
+        username,
         customerId,
         deviceId,
         deviceInfo: {},
@@ -95,8 +97,14 @@ export function initMqttBroker(httpServer?: Server): Aedes {
         lastPing: new Date(),
       };
 
-      // Store by clientId temporarily until we get username from status
-      clientToUsername.set(clientId, clientId); // temporary mapping
+      connectedDevices.set(username, device);
+      clientToUsername.set(clientId, username);
+      log(`Device registered from client ID: ${username} (${deviceId})`, "mqtt");
+    } else if (parts.length >= 2) {
+      // Fallback for old format: {customerid}/{deviceid}
+      const customerId = parts[0];
+      const deviceId = parts[1];
+      clientToUsername.set(clientId, clientId);
     }
   });
 

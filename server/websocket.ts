@@ -290,6 +290,7 @@ export const REMOTE_COMMANDS = {
   RESET_PARENTAL_PASSWORD: "reset_parental_password",
   DELETE_CACHE: "delete_cache",
   GET_INFO_DM: "get_info_dm",
+  RESTART_APP: "restart_app",
 } as const;
 
 export type RemoteCommand = typeof REMOTE_COMMANDS[keyof typeof REMOTE_COMMANDS];
