@@ -330,6 +330,14 @@ export function sendAnnouncementToUser(username: string, params: AnnouncementPar
     ann_disappear: String(params.disappearAfter || 1),
   });
 
+  // Debug logging
+  console.log("[MQTT] Sending announcement:");
+  console.log("[MQTT]   Topic:", topic);
+  console.log("[MQTT]   Device customerId:", device.customerId);
+  console.log("[MQTT]   Device appName:", device.deviceInfo.appName);
+  console.log("[MQTT]   Cleaned appName:", appName);
+  console.log("[MQTT]   Payload:", payload);
+
   aedes.publish(
     {
       topic,
