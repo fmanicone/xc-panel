@@ -323,8 +323,8 @@ export function sendAnnouncementToUser(username: string, params: AnnouncementPar
   const device = connectedDevices.get(username);
   if (!device || !aedes) return false;
 
-  // Get appName from device info, remove spaces
-  const appName = (device.deviceInfo.appName || "XCIPTV").replace(/\s+/g, "");
+  // Get appName from device info (keep spaces - app subscribes with spaces)
+  const appName = device.deviceInfo.appName || "XCIPTV";
 
   // Topic format: {customerId}/ann/{appName}
   const topic = `${device.customerId}/ann/${appName}`;
@@ -341,9 +341,6 @@ export function sendAnnouncementToUser(username: string, params: AnnouncementPar
   // Debug logging
   console.log("[MQTT] Sending announcement:");
   console.log("[MQTT]   Topic:", topic);
-  console.log("[MQTT]   Device customerId:", device.customerId);
-  console.log("[MQTT]   Device appName:", device.deviceInfo.appName);
-  console.log("[MQTT]   Cleaned appName:", appName);
   console.log("[MQTT]   Payload:", payload);
 
   aedes.publish(
