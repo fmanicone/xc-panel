@@ -100,14 +100,6 @@ export function initMqttBroker(): Aedes {
     }
   });
 
-  // Log subscriptions to debug announcement delivery
-  aedes.on("subscribe", (subscriptions, client) => {
-    if (!client || !subscriptions) return;
-    subscriptions.forEach((sub) => {
-      console.log(`[MQTT] Client ${client.id} subscribed to: ${sub.topic}`);
-    });
-  });
-
   // Handle published messages
   aedes.on("publish", (packet, client) => {
     if (!packet) return;
@@ -263,14 +255,8 @@ export function sendMessageToUser(username: string, message: string): boolean {
   const device = connectedDevices.get(username);
   if (!device || !aedes) return false;
 
-  // Topic format: {customerId}/{username}/{deviceId}/msg
   const topic = `${device.customerId}/${device.username}/${device.deviceId}/msg`;
 
-  console.log("[MQTT] Sending message:");
-  console.log("[MQTT]   Topic:", topic);
-  console.log("[MQTT]   Message:", message);
-
-  // Send the message as plain text (the Android app expects this format)
   aedes.publish(
     {
       topic,
@@ -280,13 +266,7 @@ export function sendMessageToUser(username: string, message: string): boolean {
       cmd: "publish",
       dup: false,
     },
-    (err) => {
-      if (err) {
-        console.log("[MQTT] Message publish error:", err);
-      } else {
-        console.log("[MQTT] Message published successfully to:", topic);
-      }
-    }
+    () => {}
   );
   return true;
 }
