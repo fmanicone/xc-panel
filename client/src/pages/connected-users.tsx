@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +25,8 @@ import {
   Settings,
   Lock,
   HardDrive,
-  Info
+  Info,
+  MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -55,6 +57,12 @@ interface RemoteCommand {
 }
 
 const REMOTE_COMMANDS: RemoteCommand[] = [
+  {
+    id: "send_announcement",
+    name: "Send Announcement",
+    description: "Send a custom announcement to the device",
+    icon: <MessageSquare className="w-4 h-4" />,
+  },
   {
     id: "restart_app",
     name: "Restart App",
@@ -99,6 +107,9 @@ export default function ConnectedUsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [sendingCommand, setSendingCommand] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [displayInterval, setDisplayInterval] = useState("5");
+  const [disappearAfter, setDisappearAfter] = useState("1");
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     command: RemoteCommand | null;
@@ -220,15 +231,49 @@ export default function ConnectedUsersPage() {
       let endpoint: string;
       let body: any;
 
-      if (target === "single" && username) {
-        endpoint = "/api/admin/remote-command/user";
-        body = { username, command };
-      } else if (target === "selected") {
-        endpoint = "/api/admin/remote-command/users";
-        body = { usernames: Array.from(selectedUsers), command };
+      // Handle send_announcement command separately
+      if (command === "send_announcement") {
+        if (!messageText.trim()) {
+          toast({
+            title: "Error",
+            description: "Please enter a message",
+            variant: "destructive",
+          });
+          setSendingCommand(false);
+          return;
+        }
+
+        if (target === "single" && username) {
+          endpoint = "/api/admin/mqtt-announcement/user";
+          body = {
+            username,
+            message: messageText,
+            status: "ACTIVE",
+            displayInterval: Number(displayInterval),
+            disappearAfter: Number(disappearAfter),
+          };
+        } else {
+          // For now, only single user announcements are supported
+          toast({
+            title: "Error",
+            description: "Announcements can only be sent to individual users",
+            variant: "destructive",
+          });
+          setSendingCommand(false);
+          return;
+        }
       } else {
-        endpoint = "/api/admin/remote-command/broadcast";
-        body = { command };
+        // Regular commands
+        if (target === "single" && username) {
+          endpoint = "/api/admin/remote-command/user";
+          body = { username, command };
+        } else if (target === "selected") {
+          endpoint = "/api/admin/remote-command/users";
+          body = { usernames: Array.from(selectedUsers), command };
+        } else {
+          endpoint = "/api/admin/remote-command/broadcast";
+          body = { command };
+        }
       }
 
       response = await fetch(endpoint, {
@@ -242,23 +287,26 @@ export default function ConnectedUsersPage() {
 
       if (data.success) {
         toast({
-          title: "Command Sent",
+          title: command === "send_announcement" ? "Announcement Sent" : "Command Sent",
           description: data.message,
         });
         if (target === "selected") {
           setSelectedUsers(new Set());
         }
+        setMessageText("");
+        setDisplayInterval("5");
+        setDisappearAfter("1");
       } else {
         toast({
           title: "Error",
-          description: data.message || "Failed to send command",
+          description: data.message || "Failed to send",
           variant: "destructive",
         });
       }
     } catch (err) {
       toast({
         title: "Error",
-        description: "Failed to send command",
+        description: "Failed to send",
         variant: "destructive",
       });
     } finally {
@@ -629,23 +677,25 @@ export default function ConnectedUsersPage() {
       {/* Confirmation Dialog */}
       <AlertDialog
         open={confirmDialog.open}
-        onOpenChange={(open) =>
-          setConfirmDialog({ ...confirmDialog, open })
-        }
+        onOpenChange={(open) => {
+          setConfirmDialog({ ...confirmDialog, open });
+          if (!open) {
+            setMessageText("");
+            setDisplayInterval("5");
+            setDisappearAfter("1");
+          }
+        }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className={confirmDialog.command?.id === "send_announcement" ? "max-w-md" : ""}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Remote Command</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle>
+              {confirmDialog.command?.id === "send_announcement"
+                ? "Send Announcement"
+                : "Confirm Remote Command"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
               {confirmDialog.command && (
-                <div className="space-y-2">
-                  <p>
-                    <strong>Command:</strong> {confirmDialog.command.name}
-                  </p>
-                  <p>
-                    <strong>Description:</strong>{" "}
-                    {confirmDialog.command.description}
-                  </p>
+                <div className="space-y-3">
                   <p>
                     <strong>Target:</strong>{" "}
                     {confirmDialog.target === "single"
@@ -654,6 +704,65 @@ export default function ConnectedUsersPage() {
                       ? `${selectedUsers.size} selected users`
                       : "All connected devices"}
                   </p>
+                  {confirmDialog.command.id === "send_announcement" && (
+                    <div className="space-y-4 pt-2">
+                      <div>
+                        <label className="text-sm font-medium text-foreground">Message</label>
+                        <Textarea
+                          placeholder="Enter your announcement..."
+                          value={messageText}
+                          onChange={(e) => setMessageText(e.target.value)}
+                          className="mt-1.5"
+                          rows={3}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-foreground">Display Interval (min)</label>
+                          <Select value={displayInterval} onValueChange={setDisplayInterval}>
+                            <SelectTrigger className="mt-1.5">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="2">2</SelectItem>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="15">15</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="30">30</SelectItem>
+                              <SelectItem value="60">60</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground">Disappear After (sec)</label>
+                          <Select value={disappearAfter} onValueChange={setDisappearAfter}>
+                            <SelectTrigger className="mt-1.5">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1</SelectItem>
+                              <SelectItem value="2">2</SelectItem>
+                              <SelectItem value="3">3</SelectItem>
+                              <SelectItem value="4">4</SelectItem>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {confirmDialog.command.id !== "send_announcement" && (
+                    <>
+                      <p>
+                        <strong>Command:</strong> {confirmDialog.command.name}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {confirmDialog.command.description}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
             </AlertDialogDescription>
@@ -671,7 +780,7 @@ export default function ConnectedUsersPage() {
                   confirmDialog.username
                 )
               }
-              disabled={sendingCommand}
+              disabled={sendingCommand || (confirmDialog.command?.id === "send_announcement" && !messageText.trim())}
             >
               {sendingCommand ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

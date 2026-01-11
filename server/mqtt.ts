@@ -42,6 +42,7 @@ const COMMAND_TO_TOPIC: Record<string, string> = {
   delete_cache: "deletedcache",
   get_info_dm: "getappinfo",
   restart_app: "restartapp",
+  send_message: "msg",
 };
 
 // Mapping topic risposta -> topic comando (il device risponde su topic diversi)
@@ -249,6 +250,113 @@ export function sendCommandToAll(command: string, additionalData?: any): number 
   return count;
 }
 
+// Send a message to a specific user via MQTT
+export function sendMessageToUser(username: string, message: string): boolean {
+  const device = connectedDevices.get(username);
+  if (!device || !aedes) return false;
+
+  // Topic format: {customerId}/{username}/{deviceId}/msg
+  const topic = `${device.customerId}/${device.username}/${device.deviceId}/msg`;
+
+  // Send the message as plain text (the Android app expects this format)
+  aedes.publish(
+    {
+      topic,
+      payload: Buffer.from(message),
+      qos: 1,
+      retain: false,
+      cmd: "publish",
+      dup: false,
+    },
+    () => {}
+  );
+  return true;
+}
+
+// Send a message to multiple users
+export function sendMessageToUsers(
+  usernames: string[],
+  message: string
+): { sent: string[]; failed: string[] } {
+  const sent: string[] = [];
+  const failed: string[] = [];
+
+  usernames.forEach((username) => {
+    if (sendMessageToUser(username, message)) {
+      sent.push(username);
+    } else {
+      failed.push(username);
+    }
+  });
+
+  return { sent, failed };
+}
+
+// Broadcast a message to all connected devices
+export function sendMessageToAll(message: string): number {
+  let count = 0;
+  connectedDevices.forEach((_, username) => {
+    if (sendMessageToUser(username, message)) count++;
+  });
+  return count;
+}
+
+// Announcement parameters interface
+export interface AnnouncementParams {
+  message: string;
+  status?: "ACTIVE" | "INACTIVE";
+  expiration?: string; // format: "yyyy-MM-dd HH:mm:ss"
+  displayInterval?: number; // 2, 5, 10, 15, 20, 30, 60 (minutes)
+  disappearAfter?: number; // 1, 2, 3, 4, 5, 10 (seconds)
+}
+
+// Send an announcement to a specific user via MQTT
+export function sendAnnouncementToUser(username: string, params: AnnouncementParams): boolean {
+  const device = connectedDevices.get(username);
+  if (!device || !aedes) return false;
+
+  // Get appName from device info, remove spaces
+  const appName = (device.deviceInfo.appName || "XCIPTV").replace(/\s+/g, "");
+
+  // Topic format: {customerId}/ann/{appName}
+  const topic = `${device.customerId}/ann/${appName}`;
+
+  // Build announcement JSON payload (note: ann_interal is a typo in the original app)
+  const payload = JSON.stringify({
+    ann_announcement: params.message,
+    ann_status: params.status || "ACTIVE",
+    ann_expire: params.expiration || formatExpiration(2), // default 2 minutes from now
+    ann_interal: String(params.displayInterval || 5), // typo is intentional - matches app
+    ann_disappear: String(params.disappearAfter || 1),
+  });
+
+  aedes.publish(
+    {
+      topic,
+      payload: Buffer.from(payload),
+      qos: 1,
+      retain: false,
+      cmd: "publish",
+      dup: false,
+    },
+    () => {}
+  );
+  return true;
+}
+
+// Helper function to format expiration date
+function formatExpiration(minutesFromNow: number): string {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() + minutesFromNow);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // Get list of connected devices
 export function getConnectedDevices(): Array<{
   username: string;
@@ -290,6 +398,7 @@ export const REMOTE_COMMANDS = {
   RESET_PARENTAL_PASSWORD: "reset_parental_password",
   DELETE_CACHE: "delete_cache",
   GET_INFO_DM: "get_info_dm",
+  SEND_MESSAGE: "send_message",
 } as const;
 
 export type RemoteCommand = (typeof REMOTE_COMMANDS)[keyof typeof REMOTE_COMMANDS];

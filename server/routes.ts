@@ -24,7 +24,12 @@ import {
   getConnectedDevices,
   isUserConnected,
   getWebSocketStats,
-  REMOTE_COMMANDS
+  REMOTE_COMMANDS,
+  sendMessageToUser,
+  sendMessageToUsers,
+  sendMessageToAll,
+  sendAnnouncementToUser,
+  type AnnouncementParams
 } from "./devices";
 
 declare module 'express-session' {
@@ -1568,6 +1573,154 @@ iframe {
       });
     } catch (err) {
       console.error("Remote command error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // ==================== MQTT Messages API ====================
+
+  // Send message to a single user via MQTT
+  app.post("/api/admin/mqtt-message/user", requireAuth, (req, res) => {
+    try {
+      const { username, message } = req.body;
+
+      if (!username || !message) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and message are required",
+        });
+      }
+
+      const sent = sendMessageToUser(username, message);
+
+      if (sent) {
+        res.json({
+          success: true,
+          message: `Message sent to ${username}`,
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: `User "${username}" is not connected via MQTT`,
+        });
+      }
+    } catch (err) {
+      console.error("MQTT message error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // Send message to multiple users via MQTT
+  app.post("/api/admin/mqtt-message/users", requireAuth, (req, res) => {
+    try {
+      const { usernames, message } = req.body;
+
+      if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Usernames array is required",
+        });
+      }
+
+      if (!message) {
+        return res.status(400).json({
+          success: false,
+          message: "Message is required",
+        });
+      }
+
+      const result = sendMessageToUsers(usernames, message);
+
+      res.json({
+        success: true,
+        message: `Message sent to ${result.sent.length} users`,
+        sent: result.sent,
+        failed: result.failed,
+      });
+    } catch (err) {
+      console.error("MQTT message error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // Broadcast message to all connected devices via MQTT
+  app.post("/api/admin/mqtt-message/broadcast", requireAuth, (req, res) => {
+    try {
+      const { message } = req.body;
+
+      if (!message) {
+        return res.status(400).json({
+          success: false,
+          message: "Message is required",
+        });
+      }
+
+      const count = sendMessageToAll(message);
+
+      res.json({
+        success: true,
+        message: `Message broadcast to ${count} connected devices`,
+        count,
+      });
+    } catch (err) {
+      console.error("MQTT message error:", err);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // Send announcement to a single user via MQTT
+  app.post("/api/admin/mqtt-announcement/user", requireAuth, (req, res) => {
+    try {
+      const { username, message, status, expiration, displayInterval, disappearAfter } = req.body;
+
+      if (!username || !message) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and message are required",
+        });
+      }
+
+      // Validate displayInterval
+      const validIntervals = [2, 5, 10, 15, 20, 30, 60];
+      if (displayInterval && !validIntervals.includes(Number(displayInterval))) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid displayInterval. Valid values: ${validIntervals.join(", ")}`,
+        });
+      }
+
+      // Validate disappearAfter
+      const validDisappear = [1, 2, 3, 4, 5, 10];
+      if (disappearAfter && !validDisappear.includes(Number(disappearAfter))) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid disappearAfter. Valid values: ${validDisappear.join(", ")}`,
+        });
+      }
+
+      const params: AnnouncementParams = {
+        message,
+        status: status || "ACTIVE",
+        expiration,
+        displayInterval: displayInterval ? Number(displayInterval) : undefined,
+        disappearAfter: disappearAfter ? Number(disappearAfter) : undefined,
+      };
+
+      const sent = sendAnnouncementToUser(username, params);
+
+      if (sent) {
+        res.json({
+          success: true,
+          message: `Announcement sent to ${username}`,
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: `User "${username}" is not connected via MQTT`,
+        });
+      }
+    } catch (err) {
+      console.error("MQTT announcement error:", err);
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });

@@ -122,3 +122,53 @@ export function getWebSocketStats(): { total: number; connected: number; socketi
 
 // Re-export REMOTE_COMMANDS
 export { REMOTE_COMMANDS } from "./websocket";
+
+// Send a message to a specific user via MQTT
+export function sendMessageToUser(username: string, message: string): boolean {
+  // MQTT is the primary protocol for messages
+  if (mqtt.isUserConnected(username)) {
+    log(`Sending message via MQTT to ${username}`, "devices");
+    return mqtt.sendMessageToUser(username, message);
+  }
+
+  log(`Cannot send message to ${username}: not connected via MQTT`, "devices");
+  return false;
+}
+
+// Send a message to multiple users
+export function sendMessageToUsers(
+  usernames: string[],
+  message: string
+): { sent: string[]; failed: string[] } {
+  const sent: string[] = [];
+  const failed: string[] = [];
+
+  usernames.forEach((username) => {
+    if (sendMessageToUser(username, message)) {
+      sent.push(username);
+    } else {
+      failed.push(username);
+    }
+  });
+
+  return { sent, failed };
+}
+
+// Broadcast a message to all connected devices
+export function sendMessageToAll(message: string): number {
+  return mqtt.sendMessageToAll(message);
+}
+
+// Re-export AnnouncementParams type
+export type { AnnouncementParams } from "./mqtt";
+
+// Send an announcement to a specific user via MQTT
+export function sendAnnouncementToUser(username: string, params: mqtt.AnnouncementParams): boolean {
+  if (mqtt.isUserConnected(username)) {
+    log(`Sending announcement via MQTT to ${username}`, "devices");
+    return mqtt.sendAnnouncementToUser(username, params);
+  }
+
+  log(`Cannot send announcement to ${username}: not connected via MQTT`, "devices");
+  return false;
+}
