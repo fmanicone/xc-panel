@@ -100,6 +100,14 @@ export function initMqttBroker(): Aedes {
     }
   });
 
+  // Log subscriptions to debug announcement delivery
+  aedes.on("subscribe", (subscriptions, client) => {
+    if (!client || !subscriptions) return;
+    subscriptions.forEach((sub) => {
+      console.log(`[MQTT] Client ${client.id} subscribed to: ${sub.topic}`);
+    });
+  });
+
   // Handle published messages
   aedes.on("publish", (packet, client) => {
     if (!packet) return;
