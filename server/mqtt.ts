@@ -347,12 +347,18 @@ export function sendAnnouncementToUser(username: string, params: AnnouncementPar
     {
       topic,
       payload: Buffer.from(payload),
-      qos: 1,
+      qos: 0,
       retain: false,
       cmd: "publish",
       dup: false,
     },
-    () => {}
+    (err) => {
+      if (err) {
+        console.log("[MQTT] Publish error:", err);
+      } else {
+        console.log("[MQTT] Announcement published successfully to:", topic);
+      }
+    }
   );
   return true;
 }
