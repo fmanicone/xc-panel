@@ -266,17 +266,27 @@ export function sendMessageToUser(username: string, message: string): boolean {
   // Topic format: {customerId}/{username}/{deviceId}/msg
   const topic = `${device.customerId}/${device.username}/${device.deviceId}/msg`;
 
+  console.log("[MQTT] Sending message:");
+  console.log("[MQTT]   Topic:", topic);
+  console.log("[MQTT]   Message:", message);
+
   // Send the message as plain text (the Android app expects this format)
   aedes.publish(
     {
       topic,
       payload: Buffer.from(message),
-      qos: 1,
+      qos: 0,
       retain: false,
       cmd: "publish",
       dup: false,
     },
-    () => {}
+    (err) => {
+      if (err) {
+        console.log("[MQTT] Message publish error:", err);
+      } else {
+        console.log("[MQTT] Message published successfully to:", topic);
+      }
+    }
   );
   return true;
 }

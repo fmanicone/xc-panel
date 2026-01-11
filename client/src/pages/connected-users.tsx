@@ -58,9 +58,9 @@ interface RemoteCommand {
 
 const REMOTE_COMMANDS: RemoteCommand[] = [
   {
-    id: "send_announcement",
-    name: "Send Announcement",
-    description: "Send a custom announcement to the device",
+    id: "send_message",
+    name: "Send Message",
+    description: "Send a simple message to the device",
     icon: <MessageSquare className="w-4 h-4" />,
   },
   {
@@ -231,8 +231,8 @@ export default function ConnectedUsersPage() {
       let endpoint: string;
       let body: any;
 
-      // Handle send_announcement command separately
-      if (command === "send_announcement") {
+      // Handle send_message command separately
+      if (command === "send_message") {
         if (!messageText.trim()) {
           toast({
             title: "Error",
@@ -244,19 +244,12 @@ export default function ConnectedUsersPage() {
         }
 
         if (target === "single" && username) {
-          endpoint = "/api/admin/mqtt-announcement/user";
-          body = {
-            username,
-            message: messageText,
-            status: "ACTIVE",
-            displayInterval: Number(displayInterval),
-            disappearAfter: Number(disappearAfter),
-          };
+          endpoint = "/api/admin/mqtt-message/user";
+          body = { username, message: messageText };
         } else {
-          // For now, only single user announcements are supported
           toast({
             title: "Error",
-            description: "Announcements can only be sent to individual users",
+            description: "Messages can only be sent to individual users",
             variant: "destructive",
           });
           setSendingCommand(false);
@@ -287,15 +280,13 @@ export default function ConnectedUsersPage() {
 
       if (data.success) {
         toast({
-          title: command === "send_announcement" ? "Announcement Sent" : "Command Sent",
+          title: command === "send_message" ? "Message Sent" : "Command Sent",
           description: data.message,
         });
         if (target === "selected") {
           setSelectedUsers(new Set());
         }
         setMessageText("");
-        setDisplayInterval("5");
-        setDisappearAfter("1");
       } else {
         toast({
           title: "Error",
@@ -686,11 +677,11 @@ export default function ConnectedUsersPage() {
           }
         }}
       >
-        <AlertDialogContent className={confirmDialog.command?.id === "send_announcement" ? "max-w-md" : ""}>
+        <AlertDialogContent className={confirmDialog.command?.id === "send_message" ? "max-w-md" : ""}>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmDialog.command?.id === "send_announcement"
-                ? "Send Announcement"
+              {confirmDialog.command?.id === "send_message"
+                ? "Send Message"
                 : "Confirm Remote Command"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
@@ -704,56 +695,19 @@ export default function ConnectedUsersPage() {
                       ? `${selectedUsers.size} selected users`
                       : "All connected devices"}
                   </p>
-                  {confirmDialog.command.id === "send_announcement" && (
-                    <div className="space-y-4 pt-2">
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Message</label>
-                        <Textarea
-                          placeholder="Enter your announcement..."
-                          value={messageText}
-                          onChange={(e) => setMessageText(e.target.value)}
-                          className="mt-1.5"
-                          rows={3}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium text-foreground">Display Interval (min)</label>
-                          <Select value={displayInterval} onValueChange={setDisplayInterval}>
-                            <SelectTrigger className="mt-1.5">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="2">2</SelectItem>
-                              <SelectItem value="5">5</SelectItem>
-                              <SelectItem value="10">10</SelectItem>
-                              <SelectItem value="15">15</SelectItem>
-                              <SelectItem value="20">20</SelectItem>
-                              <SelectItem value="30">30</SelectItem>
-                              <SelectItem value="60">60</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-foreground">Disappear After (sec)</label>
-                          <Select value={disappearAfter} onValueChange={setDisappearAfter}>
-                            <SelectTrigger className="mt-1.5">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">1</SelectItem>
-                              <SelectItem value="2">2</SelectItem>
-                              <SelectItem value="3">3</SelectItem>
-                              <SelectItem value="4">4</SelectItem>
-                              <SelectItem value="5">5</SelectItem>
-                              <SelectItem value="10">10</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
+                  {confirmDialog.command.id === "send_message" && (
+                    <div className="pt-2">
+                      <label className="text-sm font-medium text-foreground">Message</label>
+                      <Textarea
+                        placeholder="Enter your message..."
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        className="mt-1.5"
+                        rows={3}
+                      />
                     </div>
                   )}
-                  {confirmDialog.command.id !== "send_announcement" && (
+                  {confirmDialog.command.id !== "send_message" && (
                     <>
                       <p>
                         <strong>Command:</strong> {confirmDialog.command.name}
@@ -780,7 +734,7 @@ export default function ConnectedUsersPage() {
                   confirmDialog.username
                 )
               }
-              disabled={sendingCommand || (confirmDialog.command?.id === "send_announcement" && !messageText.trim())}
+              disabled={sendingCommand || (confirmDialog.command?.id === "send_message" && !messageText.trim())}
             >
               {sendingCommand ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
