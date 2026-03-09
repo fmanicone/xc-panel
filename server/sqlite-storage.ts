@@ -70,6 +70,11 @@ export interface SqliteSettings {
   widgetAllTeams: string;
   widgetSport: string;
   widgetLanguage: string;
+  widgetSource: string;
+  widgetApiKey: string;
+  widgetTvCountry: string;
+  widgetTvMap: string;
+  widgetTimezone: string;
   backdropEnabled: string;
   backdropApiKey: string;
   backdropPageCount: string;
@@ -265,6 +270,11 @@ function rowToSettings(row: any): SqliteSettings {
     widgetAllTeams: row.widget_all_teams || 'true',
     widgetSport: row.widget_sport || 'futbol',
     widgetLanguage: row.widget_language || 'en-CA',
+    widgetSource: row.widget_source || 'futbolenlatv',
+    widgetApiKey: row.widget_api_key || '',
+    widgetTvCountry: row.widget_tv_country || 'italy',
+    widgetTvMap: row.widget_tv_map || '',
+    widgetTimezone: row.widget_timezone || 'Europe/Rome',
     backdropEnabled: row.backdrop_enabled || 'true',
     backdropApiKey: row.backdrop_api_key || '6b8e3eaa1a03ebb45642e9531d8a76d2',
     backdropPageCount: row.backdrop_page_count || '15',
@@ -449,6 +459,11 @@ export const sqliteStorage = {
       widgetAllTeams: 'widget_all_teams',
       widgetSport: 'widget_sport',
       widgetLanguage: 'widget_language',
+      widgetSource: 'widget_source',
+      widgetApiKey: 'widget_api_key',
+      widgetTvCountry: 'widget_tv_country',
+      widgetTvMap: 'widget_tv_map',
+      widgetTimezone: 'widget_timezone',
       backdropEnabled: 'backdrop_enabled',
       backdropApiKey: 'backdrop_api_key',
       backdropPageCount: 'backdrop_page_count',

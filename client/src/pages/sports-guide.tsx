@@ -86,6 +86,89 @@ const languages = [
   { value: "fr-FR", label: "French" },
   { value: "it-IT", label: "Italian" },
   { value: "de-DE", label: "German" },
+  { value: "es-ES", label: "Spanish" },
+  { value: "pt-PT", label: "Portuguese" },
+  { value: "nl-NL", label: "Dutch" },
+  { value: "tr-TR", label: "Turkish" },
+];
+
+const timezones = [
+  { value: "Europe/Rome", label: "Italia (CET/CEST)" },
+  { value: "Europe/Madrid", label: "Spagna (CET/CEST)" },
+  { value: "Europe/London", label: "UK (GMT/BST)" },
+  { value: "Europe/Berlin", label: "Germania (CET/CEST)" },
+  { value: "Europe/Paris", label: "Francia (CET/CEST)" },
+  { value: "Europe/Lisbon", label: "Portogallo (WET/WEST)" },
+  { value: "Europe/Amsterdam", label: "Olanda (CET/CEST)" },
+  { value: "Europe/Istanbul", label: "Turchia (TRT)" },
+  { value: "America/New_York", label: "USA East (EST/EDT)" },
+  { value: "America/Los_Angeles", label: "USA West (PST/PDT)" },
+  { value: "America/Sao_Paulo", label: "Brasile (BRT)" },
+  { value: "America/Mexico_City", label: "Messico (CST/CDT)" },
+  { value: "Asia/Dubai", label: "Dubai (GST)" },
+  { value: "Asia/Riyadh", label: "Arabia Saudita (AST)" },
+];
+
+const leagueNames: Record<string, string> = {
+  "4328": "English Premier League",
+  "4335": "Scottish Premiership",
+  "4331": "German Bundesliga",
+  "4332": "Italian Serie A",
+  "4334": "French Ligue 1",
+  "4337": "Spanish La Liga",
+  "4339": "Dutch Eredivisie",
+  "4351": "Brazilian Serie A",
+  "4350": "Mexican Liga MX",
+  "4344": "Portuguese Primeira Liga",
+  "4357": "Turkish Super Lig",
+  "4480": "UEFA Champions League",
+  "4481": "UEFA Europa League",
+  "4502": "UEFA Conference League",
+  "4346": "FIFA World Cup",
+  "4482": "FA Cup",
+  "4483": "EFL Cup (Carabao)",
+};
+
+const tvPresets: Record<string, Record<string, string>> = {
+  italy: {
+    "4328": "Sky Sport / DAZN", "4335": "Sky Sport", "4331": "Sky Sport / DAZN", "4332": "DAZN",
+    "4334": "Sky Sport", "4337": "DAZN", "4339": "Sky Sport", "4351": "DAZN", "4350": "DAZN",
+    "4344": "Sky Sport", "4357": "DAZN", "4480": "Sky Sport / Amazon Prime", "4481": "Sky Sport / TV8",
+    "4502": "DAZN / Sky Sport", "4346": "Rai Sport", "4482": "Sky Sport", "4483": "Sky Sport"
+  },
+  spain: {
+    "4328": "DAZN / Movistar+", "4335": "DAZN", "4331": "Movistar+ / DAZN", "4332": "DAZN",
+    "4334": "Movistar+", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
+    "4344": "DAZN", "4357": "DAZN", "4480": "Movistar+ Liga de Campeones", "4481": "Movistar+",
+    "4502": "Movistar+", "4346": "La 1 / RTVE", "4482": "ESPN", "4483": "DAZN"
+  },
+  uk: {
+    "4328": "Sky / TNT", "4335": "Sky Sports", "4331": "Sky / DAZN", "4332": "Viaplay",
+    "4334": "Sky Sport", "4337": "TNT Sports", "4339": "Viaplay", "4351": "Premier Sports", "4350": "Sky Sport",
+    "4344": "BT Sport", "4357": "BT Sport", "4480": "TNT / Amazon", "4481": "TNT Sports",
+    "4502": "TNT Sports", "4346": "BBC / ITV", "4482": "BBC / ITV", "4483": "Sky Sports"
+  },
+  germany: {
+    "4328": "Sky / DAZN", "4335": "Sky Sport", "4331": "Sky / DAZN", "4332": "DAZN",
+    "4334": "DAZN", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
+    "4344": "DAZN", "4357": "DAZN", "4480": "DAZN / Amazon Prime", "4481": "RTL / DAZN",
+    "4502": "DAZN", "4346": "ARD / ZDF", "4482": "DAZN", "4483": "Sky Sport"
+  },
+  france: {
+    "4328": "Canal+ / beIN Sports", "4335": "beIN Sports", "4331": "beIN Sports", "4332": "beIN Sports",
+    "4334": "DAZN / beIN Sports", "4337": "beIN Sports", "4339": "beIN Sports", "4351": "beIN Sports", "4350": "beIN Sports",
+    "4344": "beIN Sports", "4357": "beIN Sports", "4480": "Canal+ / beIN Sports", "4481": "Canal+ / W9",
+    "4502": "Canal+", "4346": "TF1 / M6", "4482": "beIN Sports", "4483": "beIN Sports"
+  },
+};
+
+const tvCountryOptions = [
+  { value: "italy", label: "Italia" },
+  { value: "spain", label: "Espana" },
+  { value: "uk", label: "United Kingdom" },
+  { value: "germany", label: "Deutschland" },
+  { value: "france", label: "France" },
+  { value: "custom", label: "Custom" },
 ];
 
 interface WidgetSettings {
@@ -99,12 +182,18 @@ interface WidgetSettings {
   widgetAllTeams: string;
   widgetSport: string;
   widgetLanguage: string;
+  widgetSource: string;
+  widgetApiKey: string;
+  widgetTvCountry: string;
+  widgetTvMap: string;
+  widgetTimezone: string;
 }
 
 export default function SportsGuide() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"soccer" | "sports">("soccer");
-  
+  const [widgetSource, setWidgetSource] = useState<"futbolenlatv" | "thesportsdb">("futbolenlatv");
+
   const [width, setWidth] = useState("280");
   const [height, setHeight] = useState("500");
   const [color, setColor] = useState("#005df8");
@@ -114,6 +203,10 @@ export default function SportsGuide() {
   const [allTeams, setAllTeams] = useState(true);
   const [sport, setSport] = useState("futbol");
   const [language, setLanguage] = useState("en-CA");
+  const [apiKey, setApiKey] = useState("");
+  const [tvCountry, setTvCountry] = useState("italy");
+  const [tvMap, setTvMap] = useState<Record<string, string>>(() => ({ ...tvPresets["italy"] }));
+  const [timezone, setTimezone] = useState("Europe/Rome");
 
   const { data: settings, isLoading } = useQuery<WidgetSettings>({
     queryKey: ["/api/admin/widget-settings"],
@@ -151,8 +244,36 @@ export default function SportsGuide() {
       setAllTeams(settings.widgetAllTeams === "true");
       setSport(settings.widgetSport || "futbol");
       setLanguage(settings.widgetLanguage || "en-CA");
+      setWidgetSource((settings.widgetSource || "futbolenlatv") as "futbolenlatv" | "thesportsdb");
+      setApiKey(settings.widgetApiKey || "");
+      setTimezone(settings.widgetTimezone || "Europe/Rome");
+      const country = settings.widgetTvCountry || "italy";
+      setTvCountry(country);
+      if (country === "custom" && settings.widgetTvMap) {
+        try {
+          setTvMap(JSON.parse(settings.widgetTvMap));
+        } catch {
+          setTvMap({ ...tvPresets["italy"] });
+        }
+      } else {
+        setTvMap({ ...tvPresets[country] || tvPresets["italy"] });
+      }
     }
   }, [settings]);
+
+  const handleTvCountryChange = (value: string) => {
+    setTvCountry(value);
+    if (value !== "custom") {
+      setTvMap({ ...tvPresets[value] || tvPresets["italy"] });
+    }
+  };
+
+  const updateTvChannel = (leagueId: string, channel: string) => {
+    setTvMap(prev => ({ ...prev, [leagueId]: channel }));
+    if (tvCountry !== "custom") {
+      setTvCountry("custom");
+    }
+  };
 
   const saveSettings = () => {
     saveMutation.mutate({
@@ -166,6 +287,11 @@ export default function SportsGuide() {
       widgetAllTeams: allTeams.toString(),
       widgetSport: sport,
       widgetLanguage: language,
+      widgetSource,
+      widgetApiKey: apiKey,
+      widgetTvCountry: tvCountry,
+      widgetTvMap: JSON.stringify(tvMap),
+      widgetTimezone: timezone,
     });
   };
 
@@ -198,122 +324,224 @@ export default function SportsGuide() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex gap-2">
-            <Button
-              variant={activeTab === "soccer" ? "default" : "outline"}
-              onClick={() => setActiveTab("soccer")}
-              data-testid="button-tab-soccer"
-            >
-              TV Soccer Schedule
-            </Button>
-            <Button
-              variant={activeTab === "sports" ? "default" : "outline"}
-              onClick={() => setActiveTab("sports")}
-              data-testid="button-tab-sports"
-            >
-              TV Sports Schedule
-            </Button>
+          <div className="space-y-2">
+            <Label>Widget Source</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={widgetSource === "futbolenlatv" ? "default" : "outline"}
+                onClick={() => setWidgetSource("futbolenlatv")}
+              >
+                FutbolEnLaTV
+              </Button>
+              <Button
+                variant={widgetSource === "thesportsdb" ? "default" : "outline"}
+                onClick={() => setWidgetSource("thesportsdb")}
+              >
+                TheSportsDB
+              </Button>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Measures</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min="240"
-                  max="500"
-                  placeholder="Width"
-                  value={width}
-                  onChange={(e) => setWidth(e.target.value)}
-                  data-testid="input-width"
-                />
-                <span className="text-muted-foreground">x</span>
-                <Input
-                  type="number"
-                  min="360"
-                  max="700"
-                  placeholder="Height"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  data-testid="input-height"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Colour</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="w-16 h-9 p-1 cursor-pointer"
-                  data-testid="input-color"
-                />
+          {widgetSource === "thesportsdb" ? (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label>TheSportsDB API Key</Label>
                 <Input
                   type="text"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="flex-1"
-                  placeholder="#005df8"
-                  data-testid="input-color-text"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Enter your TheSportsDB API key"
                 />
               </div>
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Language</Label>
-            <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger data-testid="select-language">
-                <SelectValue placeholder="Select a language..." />
-              </SelectTrigger>
-              <SelectContent>
-                {languages.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Language</Label>
+                  <Select value={language} onValueChange={setLanguage}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select language..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.value} value={lang.value}>
+                          {lang.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select value={timezone} onValueChange={setTimezone}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select timezone..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timezones.map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-          {activeTab === "soccer" && (
-            <div className="space-y-2">
-              <Label>Competition</Label>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={competition}
-                  onValueChange={setCompetition}
-                  disabled={allCompetitions}
-                >
-                  <SelectTrigger data-testid="select-competition">
-                    <SelectValue placeholder="Select a competition..." />
+              <div className="space-y-2">
+                <Label>TV Channels Preset</Label>
+                <Select value={tvCountry} onValueChange={handleTvCountryChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select country..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {competitions.map((comp) => (
-                      <SelectItem key={comp.value} value={comp.value}>
-                        {comp.label}
+                    {tvCountryOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="all-competitions"
-                    checked={allCompetitions}
-                    onCheckedChange={(checked) => setAllCompetitions(checked as boolean)}
-                    data-testid="checkbox-all-competitions"
-                  />
-                  <Label htmlFor="all-competitions" className="text-sm whitespace-nowrap">
-                    All
-                  </Label>
+                <p className="text-xs text-muted-foreground">
+                  Select a country preset or customize each league channel below. Editing any channel switches to Custom.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>TV Channels per League</Label>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {Object.entries(leagueNames).map(([id, name]) => (
+                    <div key={id} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">{name}</Label>
+                      <Input
+                        type="text"
+                        value={tvMap[id] || ""}
+                        onChange={(e) => updateTvChannel(id, e.target.value)}
+                        placeholder="Channel name..."
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-          )}
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Button
+                  variant={activeTab === "soccer" ? "default" : "outline"}
+                  onClick={() => setActiveTab("soccer")}
+                  data-testid="button-tab-soccer"
+                >
+                  TV Soccer Schedule
+                </Button>
+                <Button
+                  variant={activeTab === "sports" ? "default" : "outline"}
+                  onClick={() => setActiveTab("sports")}
+                  data-testid="button-tab-sports"
+                >
+                  TV Sports Schedule
+                </Button>
+              </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Measures</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="240"
+                      max="500"
+                      placeholder="Width"
+                      value={width}
+                      onChange={(e) => setWidth(e.target.value)}
+                      data-testid="input-width"
+                    />
+                    <span className="text-muted-foreground">x</span>
+                    <Input
+                      type="number"
+                      min="360"
+                      max="700"
+                      placeholder="Height"
+                      value={height}
+                      onChange={(e) => setHeight(e.target.value)}
+                      data-testid="input-height"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Colour</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="color"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="w-16 h-9 p-1 cursor-pointer"
+                      data-testid="input-color"
+                    />
+                    <Input
+                      type="text"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="flex-1"
+                      placeholder="#005df8"
+                      data-testid="input-color-text"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger data-testid="select-language">
+                    <SelectValue placeholder="Select a language..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {activeTab === "soccer" && (
+                <div className="space-y-2">
+                  <Label>Competition</Label>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={competition}
+                      onValueChange={setCompetition}
+                      disabled={allCompetitions}
+                    >
+                      <SelectTrigger data-testid="select-competition">
+                        <SelectValue placeholder="Select a competition..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {competitions.map((comp) => (
+                          <SelectItem key={comp.value} value={comp.value}>
+                            {comp.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="all-competitions"
+                        checked={allCompetitions}
+                        onCheckedChange={(checked) => setAllCompetitions(checked as boolean)}
+                        data-testid="checkbox-all-competitions"
+                      />
+                      <Label htmlFor="all-competitions" className="text-sm whitespace-nowrap">
+                        All
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           <Button onClick={saveSettings} disabled={saveMutation.isPending} data-testid="button-save">
             {saveMutation.isPending ? (

@@ -951,41 +951,298 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/sport.php", (req, res) => {
+  app.get("/api/sport.php", async (req, res) => {
     try {
       const settings = storage.getSettings();
-      const width = settings?.widgetWidth || '280';
-      const height = settings?.widgetHeight || '500';
-      const color = (settings?.widgetColor || '#005df8').replace('#', '');
-      const widgetType = settings?.widgetType || 'soccer';
-      const competition = settings?.widgetCompetition || '';
-      const allCompetitions = settings?.widgetAllCompetitions === 'true';
-      const team = settings?.widgetTeam || '';
-      const allTeams = settings?.widgetAllTeams === 'true';
-      const sport = settings?.widgetSport || 'futbol';
-      const language = settings?.widgetLanguage || 'en-CA';
-      
-      let params = `w=${width}&h=${height}&color=${color}&culture=${language}`;
-      
-      if (widgetType === 'soccer') {
-        if (!allCompetitions && competition) {
-          params += `&competition=${competition}`;
+      const widgetSource = settings?.widgetSource || 'futbolenlatv';
+
+      if (widgetSource === 'thesportsdb') {
+        // TheSportsDB source - client-side fetching to avoid server IP rate limits
+        const apiKey = settings?.widgetApiKey || '123';
+
+        const tvCountry = settings?.widgetTvCountry || 'italy';
+        let tvMapJson = '{}';
+        if (tvCountry === 'custom' && settings?.widgetTvMap) {
+          tvMapJson = settings.widgetTvMap;
+        } else {
+          const tvPresets: Record<string, Record<string, string>> = {
+            italy: {
+              "4328": "Sky Sport / DAZN", "4335": "Sky Sport", "4331": "Sky Sport / DAZN", "4332": "DAZN",
+              "4334": "Sky Sport", "4337": "DAZN", "4339": "Sky Sport", "4351": "DAZN", "4350": "DAZN",
+              "4344": "Sky Sport", "4357": "DAZN", "4480": "Sky Sport / Amazon Prime", "4481": "Sky Sport / TV8",
+              "4502": "DAZN / Sky Sport", "4346": "Rai Sport", "4482": "Sky Sport", "4483": "Sky Sport"
+            },
+            spain: {
+              "4328": "DAZN / Movistar+", "4335": "DAZN", "4331": "Movistar+ / DAZN", "4332": "DAZN",
+              "4334": "Movistar+", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
+              "4344": "DAZN", "4357": "DAZN", "4480": "Movistar+ Liga de Campeones", "4481": "Movistar+",
+              "4502": "Movistar+", "4346": "La 1 / RTVE", "4482": "ESPN", "4483": "DAZN"
+            },
+            uk: {
+              "4328": "Sky / TNT", "4335": "Sky Sports", "4332": "Viaplay", "4331": "Sky / DAZN",
+              "4337": "TNT Sports", "4480": "TNT / Amazon", "4481": "TNT Sports", "4502": "TNT Sports",
+              "4346": "BBC / ITV", "4482": "BBC / ITV", "4483": "Sky Sports"
+            },
+            germany: {
+              "4328": "Sky / DAZN", "4335": "Sky Sport", "4331": "Sky / DAZN", "4332": "DAZN",
+              "4334": "Sky / DAZN", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
+              "4344": "DAZN", "4357": "DAZN", "4480": "DAZN / Amazon Prime", "4481": "RTL / DAZN",
+              "4502": "DAZN", "4346": "ARD / ZDF", "4482": "DAZN", "4483": "Sky Sport"
+            },
+            france: {
+              "4328": "Canal+ / beIN Sports", "4335": "beIN Sports", "4331": "beIN Sports", "4332": "beIN Sports",
+              "4334": "beIN Sports", "4337": "DAZN / beIN Sports", "4339": "beIN Sports", "4351": "beIN Sports", "4350": "beIN Sports",
+              "4344": "beIN Sports", "4357": "beIN Sports", "4480": "Canal+ / beIN Sports", "4481": "Canal+ / W9",
+              "4502": "Canal+", "4346": "TF1 / M6", "4482": "beIN Sports", "4483": "beIN Sports"
+            }
+          };
+          tvMapJson = JSON.stringify(tvPresets[tvCountry] || tvPresets['italy']);
         }
-        if (!allTeams && team) {
-          params += `&team=${team}`;
-        }
-      } else {
-        params += `&agenda=1`;
-        if (sport) {
-          params += `&sport=${sport}`;
+
+        const widgetLang = settings?.widgetLanguage || 'it-IT';
+        const widgetTz = settings?.widgetTimezone || 'Europe/Rome';
+
+        res.setHeader("Content-Type", "text/html");
+        res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{box-sizing:border-box}
+:root{--neon:#00f2ff;--glass:rgba(255,255,255,.05);--purple:#a0f;--tv-gold:#ffd700}
+body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scroll-behavior:smooth}
+.date-group{scroll-margin-top:140px}
+.header-nav{position:sticky;top:0;background:rgba(17,17,17,.95);backdrop-filter:blur(10px);z-index:100;border-bottom:1px solid var(--neon)}
+.nav-row{display:flex;overflow-x:auto;padding:10px;gap:8px;scrollbar-width:none}
+.nav-row::-webkit-scrollbar{display:none}
+.nav-item{background:#222;padding:8px 12px;border-radius:5px;text-decoration:none;color:#fff;font-size:11px;white-space:nowrap;border:1px solid #444;text-transform:uppercase;font-weight:bold;cursor:pointer}
+.active-filter{border-color:var(--neon);color:var(--neon);background:rgba(0,242,255,.1)}
+.league-item{border-color:var(--purple);color:var(--purple)}
+.container{padding:20px;max-width:1200px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;margin-bottom:40px}
+.card{background:var(--glass);padding:20px;border-radius:20px;border:1px solid #333;text-align:center;transition:border-color .2s}
+.card:hover{border-color:var(--neon)}
+.hidden-match{display:none!important}
+.day-header{border-left:4px solid var(--neon);padding-left:15px;margin:40px 0 20px;text-transform:uppercase;font-weight:900;color:var(--neon)}
+.time-box{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
+.time{color:var(--neon);font-size:18px;font-weight:800}
+.tv-station{font-size:10px;color:var(--tv-gold);border:1px solid var(--tv-gold);padding:2px 8px;border-radius:4px;font-weight:900;background:rgba(255,215,0,.1)}
+.badge{width:60px;height:60px;object-fit:contain;transition:opacity .3s}
+.badge[src=""]{display:none}
+.team{flex:1;text-align:center}
+.name{font-size:12px;font-weight:bold;text-transform:uppercase;height:30px;display:flex;align-items:center;justify-content:center}
+.vs{opacity:.3;font-weight:900;padding:0 5px}
+.league-footer{font-size:10px;margin-top:15px;color:#666;border-top:1px solid rgba(255,255,255,.1);padding-top:10px}
+.loading{text-align:center;padding:60px 20px;color:var(--neon);font-size:16px}
+.spinner{display:inline-block;width:30px;height:30px;border:3px solid #333;border-top-color:var(--neon);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:15px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="header-nav">
+  <div class="nav-row" id="dateNav"><a onclick="currentDateFilter=null;currentLeagueFilter='all';document.querySelectorAll('.nav-item').forEach(function(b){b.classList.remove('active-filter')});this.classList.add('active-filter');applyFilters()" class="nav-item active-filter">ALL MATCHES</a></div>
+  <div class="nav-row" id="leagueNav" style="padding-top:0"></div>
+</div>
+<div class="container" id="container">
+  <div class="loading"><div class="spinner"></div><br>Loading matches...</div>
+</div>
+<script>
+(function(){
+  var API_KEY=${JSON.stringify(apiKey)},LANG=${JSON.stringify(widgetLang)},TZ=${JSON.stringify(widgetTz)};
+  var tvMap=${tvMapJson};
+  var leagues=[4328,4335,4331,4332,4334,4337,4339,4351,4350,4344,4357,4480,4481,4502,4346,4482,4483];
+  var seasonIds=new Set([4328,4335,4480,4481,4502,4482,4483]);
+  var now=new Date(),todayStr=now.toISOString().split('T')[0];
+  var maxDate=new Date(now);maxDate.setDate(maxDate.getDate()+7);
+  var y=now.getFullYear();
+  var season=now.getMonth()>=6?y+'-'+(y+1):(y-1)+'-'+y;
+  var CACHE_KEY='sportsdb_badges',CACHE_TTL=86400000; // 24h
+
+  // Badge cache with localStorage persistence
+  var badgeCache={};
+  try{
+    var stored=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');
+    if(stored._ts&&Date.now()-stored._ts<CACHE_TTL){badgeCache=stored;delete badgeCache._ts}
+  }catch(e){}
+
+  function saveBadgeCache(){
+    try{var o=Object.assign({},badgeCache,{_ts:Date.now()});localStorage.setItem(CACHE_KEY,JSON.stringify(o))}catch(e){}
+  }
+
+  // Fetch events
+  var events=[],seen={},activeLeagues={};
+
+  function fetchLeague(id){
+    var url=seasonIds.has(id)
+      ?'https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsseason.php?id='+id+'&s='+season
+      :'https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsnextleague.php?id='+id;
+    return fetch(url).then(function(r){return r.json()}).then(function(data){
+      if(!data||!data.events)return;
+      for(var i=0;i<data.events.length;i++){
+        var e=data.events[i],ed=new Date(e.dateEvent+'T00:00:00');
+        if(ed>=new Date(todayStr+'T00:00:00')&&ed<=maxDate&&!seen[e.idEvent]){
+          if(!e.strTVStation)e.strTVStation=tvMap[e.idLeague]||'';
+          events.push(e);seen[e.idEvent]=1;activeLeagues[e.idLeague]=e.strLeague;
         }
       }
-      
-      const iframeWidth = parseInt(width) + 10;
-      const iframeHeight = parseInt(height) + 10;
-      
-      res.setHeader("Content-Type", "text/html");
-      res.send(`<!DOCTYPE html>
+    }).catch(function(){});
+  }
+
+  Promise.all(leagues.map(fetchLeague)).then(function(){
+    events.sort(function(a,b){return new Date(a.dateEvent+'T'+a.strTime).getTime()-new Date(b.dateEvent+'T'+b.strTime).getTime()});
+    render();
+    loadBadges();
+  });
+
+  function render(){
+    // Date nav - only dates that have events
+    var eventDates=new Set();
+    events.forEach(function(e){eventDates.add(e.dateEvent)});
+    var dateNav=document.getElementById('dateNav');
+    for(var i=0;i<7;i++){
+      var d=new Date(now);d.setDate(d.getDate()+i);
+      var ds=d.toISOString().split('T')[0];
+      if(!eventDates.has(ds))continue;
+      var a=document.createElement('a');
+      a.className='nav-item';a.setAttribute('data-datefilter',ds);
+      a.textContent=ds===todayStr?'TODAY':d.toLocaleDateString(LANG,{weekday:'short',day:'numeric',timeZone:TZ}).toUpperCase();
+      a.onclick=function(){filterDate(this.getAttribute('data-datefilter'),this)};
+      dateNav.appendChild(a);
+    }
+
+    // League filters
+    var leagueNav=document.getElementById('leagueNav');
+    Object.keys(activeLeagues).forEach(function(id){
+      var a=document.createElement('a');a.className='nav-item league-item';
+      a.textContent=activeLeagues[id].replace(/English |Spanish |German |UEFA /g,'');
+      a.onclick=function(){filterLeague(id,this)};
+      leagueNav.appendChild(a);
+    });
+
+    // Cards
+    var container=document.getElementById('container');
+    container.innerHTML='';
+    if(!events.length){container.innerHTML='<div class="loading" style="color:#666">No matches found for the next 7 days.</div>';return}
+    var lastDate='',grid;
+    for(var i=0;i<events.length;i++){
+      var e=events[i];
+      if(e.dateEvent!==lastDate){
+        lastDate=e.dateEvent;
+        var h=document.createElement('div');h.id='date-'+e.dateEvent;h.className='day-header date-group';
+        h.textContent=new Date(e.dateEvent+'T12:00:00').toLocaleDateString(LANG,{weekday:'long',day:'numeric',month:'long',timeZone:TZ});
+        container.appendChild(h);
+        grid=document.createElement('div');grid.className='grid';container.appendChild(grid);
+      }
+      var utc=new Date(e.dateEvent+'T'+(e.strTime||'00:00:00').substring(0,8)+'Z');
+      var time=utc.toLocaleTimeString(LANG,{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:TZ});
+      var hb=badgeCache[e.strHomeTeam]||'',ab=badgeCache[e.strAwayTeam]||'';
+      var card=document.createElement('div');card.className='card match-card';card.setAttribute('data-league',e.idLeague);card.setAttribute('data-date',e.dateEvent);
+      card.innerHTML='<div class="time-box"><span class="time">'+time+'</span>'+(e.strTVStation?'<span class="tv-station">\\ud83d\\udcfa '+e.strTVStation+'</span>':'')+'</div><div style="display:flex;justify-content:space-around;align-items:center"><div class="team"><img class="badge" data-team="'+esc(e.strHomeTeam)+'" src="'+hb+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strHomeTeam)+'</div></div><div class="vs">VS</div><div class="team"><img class="badge" data-team="'+esc(e.strAwayTeam)+'" src="'+ab+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strAwayTeam)+'</div></div></div><div class="league-footer">'+esc(e.strLeague)+'</div>';
+      grid.appendChild(card);
+    }
+  }
+
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+  // Load badges progressively after render
+  function loadBadges(){
+    var names=new Set();
+    events.forEach(function(e){if(e.strHomeTeam)names.add(e.strHomeTeam);if(e.strAwayTeam)names.add(e.strAwayTeam)});
+    // Skip teams already cached
+    var toFetch=[];
+    names.forEach(function(n){if(!badgeCache[n])toFetch.push(n)});
+    if(!toFetch.length)return;
+
+    var idx=0;
+    function next(){
+      if(idx>=toFetch.length){saveBadgeCache();return}
+      var batch=toFetch.slice(idx,idx+5);idx+=5;
+      Promise.all(batch.map(function(name){
+        return fetch('https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/searchteams.php?t='+encodeURIComponent(name))
+          .then(function(r){return r.json()})
+          .then(function(data){
+            if(data&&data.teams&&data.teams[0]&&data.teams[0].strBadge){
+              badgeCache[name]=data.teams[0].strBadge;
+              // Update all matching badge images immediately
+              document.querySelectorAll('img[data-team="'+CSS.escape(name)+'"]').forEach(function(img){
+                img.src=badgeCache[name];img.style.display='';
+              });
+            }
+          }).catch(function(){});
+      })).then(next);
+    }
+    next();
+  }
+})();
+
+var currentDateFilter=null,currentLeagueFilter='all';
+
+function applyFilters(){
+  document.querySelectorAll('.match-card').forEach(function(c){
+    var matchDate=currentDateFilter===null||c.getAttribute('data-date')===currentDateFilter;
+    var matchLeague=currentLeagueFilter==='all'||c.getAttribute('data-league')===currentLeagueFilter;
+    c.classList.toggle('hidden-match',!(matchDate&&matchLeague));
+  });
+  document.querySelectorAll('.date-group').forEach(function(h){
+    var g=h.nextElementSibling;if(!g)return;
+    var v=g.querySelectorAll('.match-card:not(.hidden-match)').length>0;
+    h.style.display=v?'':'none';g.style.display=v?'grid':'none';
+  });
+}
+
+function filterDate(date,el){
+  document.querySelectorAll('#dateNav .nav-item').forEach(function(b){b.classList.remove('active-filter')});
+  el.classList.add('active-filter');
+  currentDateFilter=date;
+  applyFilters();
+  var target=document.getElementById('date-'+date);
+  if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function filterLeague(id,el){
+  document.querySelectorAll('#leagueNav .nav-item').forEach(function(b){b.classList.remove('active-filter')});
+  el.classList.add('active-filter');
+  currentLeagueFilter=id;
+  applyFilters();
+}
+</script>
+</body>
+</html>`);
+      } else {
+        // Default: futbolenlatv widget
+        const width = settings?.widgetWidth || '280';
+        const height = settings?.widgetHeight || '500';
+        const color = (settings?.widgetColor || '#005df8').replace('#', '');
+        const widgetType = settings?.widgetType || 'soccer';
+        const competition = settings?.widgetCompetition || '';
+        const allCompetitions = settings?.widgetAllCompetitions === 'true';
+        const team = settings?.widgetTeam || '';
+        const allTeams = settings?.widgetAllTeams === 'true';
+        const sport = settings?.widgetSport || 'futbol';
+        const language = settings?.widgetLanguage || 'en-CA';
+
+        let params = `w=${width}&h=${height}&color=${color}&culture=${language}`;
+
+        if (widgetType === 'soccer') {
+          if (!allCompetitions && competition) {
+            params += `&competition=${competition}`;
+          }
+          if (!allTeams && team) {
+            params += `&team=${team}`;
+          }
+        } else {
+          params += `&agenda=1`;
+          if (sport) {
+            params += `&sport=${sport}`;
+          }
+        }
+
+        const iframeWidth = parseInt(width) + 10;
+        const iframeHeight = parseInt(height) + 10;
+
+        res.setHeader("Content-Type", "text/html");
+        res.send(`<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, text/html, charset=utf-8">
@@ -1006,6 +1263,7 @@ iframe {
 <iframe src="https://widgets.futbolenlatv.com/js/iframe?${params}" width="${iframeWidth}" height="${iframeHeight}" frameborder="0" scrolling="auto"></iframe>
 </body>
 </html>`);
+      }
     } catch (err) {
       res.status(500).send("Error loading widget");
     }
@@ -1025,12 +1283,17 @@ iframe {
         widgetAllTeams: settings?.widgetAllTeams || 'true',
         widgetSport: settings?.widgetSport || 'futbol',
         widgetLanguage: settings?.widgetLanguage || 'en-CA',
+        widgetSource: settings?.widgetSource || 'futbolenlatv',
+        widgetApiKey: settings?.widgetApiKey || '',
+        widgetTvCountry: settings?.widgetTvCountry || 'italy',
+        widgetTvMap: settings?.widgetTvMap || '',
+        widgetTimezone: settings?.widgetTimezone || 'Europe/Rome',
       });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  
+
   app.put("/api/admin/widget-settings", (req, res) => {
     try {
       const {
@@ -1044,8 +1307,13 @@ iframe {
         widgetAllTeams,
         widgetSport,
         widgetLanguage,
+        widgetSource,
+        widgetApiKey,
+        widgetTvCountry,
+        widgetTvMap,
+        widgetTimezone,
       } = req.body;
-      
+
       storage.updateSettings({
         widgetWidth,
         widgetHeight,
@@ -1057,6 +1325,11 @@ iframe {
         widgetAllTeams,
         widgetSport,
         widgetLanguage,
+        widgetSource,
+        widgetApiKey,
+        widgetTvCountry,
+        widgetTvMap,
+        widgetTimezone,
       });
       
       res.json({ success: true });
