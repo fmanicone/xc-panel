@@ -109,6 +109,8 @@ const widgetColumns = [
   { name: 'widget_language', def: "TEXT DEFAULT 'en-CA'" },
   { name: 'widget_source', def: "TEXT DEFAULT 'futbolenlatv'" },
   { name: 'widget_api_key', def: "TEXT DEFAULT ''" },
+  { name: 'widget_sportsdb_sport', def: "TEXT DEFAULT 'Soccer'" },
+  { name: 'widget_sportsdb_leagues', def: "TEXT DEFAULT ''" },
   { name: 'widget_tv_country', def: "TEXT DEFAULT 'italy'" },
   { name: 'widget_tv_map', def: "TEXT DEFAULT ''" },
   { name: 'widget_timezone', def: "TEXT DEFAULT 'Europe/Rome'" },

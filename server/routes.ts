@@ -960,47 +960,20 @@ export async function registerRoutes(
         // TheSportsDB source - client-side fetching to avoid server IP rate limits
         const apiKey = settings?.widgetApiKey || '123';
 
-        const tvCountry = settings?.widgetTvCountry || 'italy';
-        let tvMapJson = '{}';
-        if (tvCountry === 'custom' && settings?.widgetTvMap) {
-          tvMapJson = settings.widgetTvMap;
-        } else {
-          const tvPresets: Record<string, Record<string, string>> = {
-            italy: {
-              "4328": "Sky Sport / DAZN", "4335": "Sky Sport", "4331": "Sky Sport / DAZN", "4332": "DAZN",
-              "4334": "Sky Sport", "4337": "DAZN", "4339": "Sky Sport", "4351": "DAZN", "4350": "DAZN",
-              "4344": "Sky Sport", "4357": "DAZN", "4480": "Sky Sport / Amazon Prime", "4481": "Sky Sport / TV8",
-              "4502": "DAZN / Sky Sport", "4346": "Rai Sport", "4482": "Sky Sport", "4483": "Sky Sport"
-            },
-            spain: {
-              "4328": "DAZN / Movistar+", "4335": "DAZN", "4331": "Movistar+ / DAZN", "4332": "DAZN",
-              "4334": "Movistar+", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
-              "4344": "DAZN", "4357": "DAZN", "4480": "Movistar+ Liga de Campeones", "4481": "Movistar+",
-              "4502": "Movistar+", "4346": "La 1 / RTVE", "4482": "ESPN", "4483": "DAZN"
-            },
-            uk: {
-              "4328": "Sky / TNT", "4335": "Sky Sports", "4332": "Viaplay", "4331": "Sky / DAZN",
-              "4337": "TNT Sports", "4480": "TNT / Amazon", "4481": "TNT Sports", "4502": "TNT Sports",
-              "4346": "BBC / ITV", "4482": "BBC / ITV", "4483": "Sky Sports"
-            },
-            germany: {
-              "4328": "Sky / DAZN", "4335": "Sky Sport", "4331": "Sky / DAZN", "4332": "DAZN",
-              "4334": "Sky / DAZN", "4337": "DAZN", "4339": "DAZN", "4351": "DAZN", "4350": "DAZN",
-              "4344": "DAZN", "4357": "DAZN", "4480": "DAZN / Amazon Prime", "4481": "RTL / DAZN",
-              "4502": "DAZN", "4346": "ARD / ZDF", "4482": "DAZN", "4483": "Sky Sport"
-            },
-            france: {
-              "4328": "Canal+ / beIN Sports", "4335": "beIN Sports", "4331": "beIN Sports", "4332": "beIN Sports",
-              "4334": "beIN Sports", "4337": "DAZN / beIN Sports", "4339": "beIN Sports", "4351": "beIN Sports", "4350": "beIN Sports",
-              "4344": "beIN Sports", "4357": "beIN Sports", "4480": "Canal+ / beIN Sports", "4481": "Canal+ / W9",
-              "4502": "Canal+", "4346": "TF1 / M6", "4482": "beIN Sports", "4483": "beIN Sports"
-            }
-          };
-          tvMapJson = JSON.stringify(tvPresets[tvCountry] || tvPresets['italy']);
-        }
+        // TV map: use saved custom map, or saved preset map from settings
+        const tvMapJson = settings?.widgetTvMap || '{}';
 
         const widgetLang = settings?.widgetLanguage || 'it-IT';
         const widgetTz = settings?.widgetTimezone || 'Europe/Rome';
+
+        let selectedLeagueIds: number[] = [];
+        const leaguesRaw = settings?.widgetSportsdbLeagues;
+        if (leaguesRaw) {
+          try {
+            const parsed = JSON.parse(leaguesRaw);
+            if (Array.isArray(parsed)) selectedLeagueIds = parsed;
+          } catch {}
+        }
 
         res.setHeader("Content-Type", "text/html");
         res.send(`<!DOCTYPE html>
@@ -1051,12 +1024,9 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
 (function(){
   var API_KEY=${JSON.stringify(apiKey)},LANG=${JSON.stringify(widgetLang)},TZ=${JSON.stringify(widgetTz)};
   var tvMap=${tvMapJson};
-  var leagues=[4328,4335,4331,4332,4334,4337,4339,4351,4350,4344,4357,4480,4481,4502,4346,4482,4483];
-  var seasonIds=new Set([4328,4335,4480,4481,4502,4482,4483]);
+  var leagues=${JSON.stringify(selectedLeagueIds)};
   var now=new Date(),todayStr=now.toISOString().split('T')[0];
   var maxDate=new Date(now);maxDate.setDate(maxDate.getDate()+7);
-  var y=now.getFullYear();
-  var season=now.getMonth()>=6?y+'-'+(y+1):(y-1)+'-'+y;
   var CACHE_KEY='sportsdb_badges',CACHE_TTL=86400000; // 24h
 
   // Badge cache with localStorage persistence
@@ -1072,17 +1042,17 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
 
   // Fetch events
   var events=[],seen={},activeLeagues={};
+  var leagueSet=new Set(leagues.map(String));
 
   function fetchLeague(id){
-    var url=seasonIds.has(id)
-      ?'https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsseason.php?id='+id+'&s='+season
-      :'https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsnextleague.php?id='+id;
+    var url='https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsnextleague.php?id='+id;
     return fetch(url).then(function(r){return r.json()}).then(function(data){
       if(!data||!data.events)return;
       for(var i=0;i<data.events.length;i++){
         var e=data.events[i],ed=new Date(e.dateEvent+'T00:00:00');
+        if(!leagueSet.has(String(e.idLeague)))continue;
         if(ed>=new Date(todayStr+'T00:00:00')&&ed<=maxDate&&!seen[e.idEvent]){
-          if(!e.strTVStation)e.strTVStation=tvMap[e.idLeague]||'';
+          e.strTVStation=tvMap[e.idLeague]||e.strTVStation||'';
           events.push(e);seen[e.idEvent]=1;activeLeagues[e.idLeague]=e.strLeague;
         }
       }
@@ -1138,7 +1108,14 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
       var time=utc.toLocaleTimeString(LANG,{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:TZ});
       var hb=badgeCache[e.strHomeTeam]||'',ab=badgeCache[e.strAwayTeam]||'';
       var card=document.createElement('div');card.className='card match-card';card.setAttribute('data-league',e.idLeague);card.setAttribute('data-date',e.dateEvent);
-      card.innerHTML='<div class="time-box"><span class="time">'+time+'</span>'+(e.strTVStation?'<span class="tv-station">\\ud83d\\udcfa '+e.strTVStation+'</span>':'')+'</div><div style="display:flex;justify-content:space-around;align-items:center"><div class="team"><img class="badge" data-team="'+esc(e.strHomeTeam)+'" src="'+hb+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strHomeTeam)+'</div></div><div class="vs">VS</div><div class="team"><img class="badge" data-team="'+esc(e.strAwayTeam)+'" src="'+ab+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strAwayTeam)+'</div></div></div><div class="league-footer">'+esc(e.strLeague)+'</div>';
+      var isTeamMatch=e.strHomeTeam&&e.strAwayTeam&&e.strHomeTeam!==e.strAwayTeam;
+      if(isTeamMatch){
+        card.innerHTML='<div class="time-box"><span class="time">'+time+'</span>'+(e.strTVStation?'<span class="tv-station">\\ud83d\\udcfa '+e.strTVStation+'</span>':'')+'</div><div style="display:flex;justify-content:space-around;align-items:center"><div class="team"><img class="badge" data-team="'+esc(e.strHomeTeam)+'" src="'+hb+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strHomeTeam)+'</div></div><div class="vs">VS</div><div class="team"><img class="badge" data-team="'+esc(e.strAwayTeam)+'" src="'+ab+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.strAwayTeam)+'</div></div></div><div class="league-footer">'+esc(e.strLeague)+'</div>';
+      }else{
+        var thumb=e.strThumb||e.strPoster||'';
+        var thumbHtml=thumb?'<img src="'+thumb+'" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:10px;border-radius:8px">':'';
+        card.innerHTML='<div class="time-box"><span class="time">'+time+'</span>'+(e.strTVStation?'<span class="tv-station">\\ud83d\\udcfa '+e.strTVStation+'</span>':'')+'</div>'+thumbHtml+'<div style="font-size:16px;font-weight:900;text-transform:uppercase;margin:10px 0">'+esc(e.strEvent)+'</div>'+(e.strVenue?'<div style="font-size:11px;color:#aaa;margin-bottom:5px">\\ud83d\\udccd '+esc(e.strVenue)+'</div>':'')+(e.strCity?'<div style="font-size:10px;color:#888">'+esc(e.strCity)+(e.strCountry?', '+esc(e.strCountry):'')+'</div>':'')+'<div class="league-footer">'+esc(e.strLeague)+'</div>';
+      }
       grid.appendChild(card);
     }
   }
@@ -1148,7 +1125,7 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
   // Load badges progressively after render
   function loadBadges(){
     var names=new Set();
-    events.forEach(function(e){if(e.strHomeTeam)names.add(e.strHomeTeam);if(e.strAwayTeam)names.add(e.strAwayTeam)});
+    events.forEach(function(e){if(e.strHomeTeam&&e.strAwayTeam&&e.strHomeTeam!==e.strAwayTeam){names.add(e.strHomeTeam);names.add(e.strAwayTeam)}});
     // Skip teams already cached
     var toFetch=[];
     names.forEach(function(n){if(!badgeCache[n])toFetch.push(n)});
@@ -1269,6 +1246,113 @@ iframe {
     }
   });
   
+  // Proxy TheSportsDB leagues endpoint (cached 1h, fetches all sports in parallel)
+  const SPORTSDB_SPORTS = [
+    'Soccer', 'Basketball', 'Ice Hockey', 'American Football', 'Baseball',
+    'Fighting', 'Motorsport', 'Tennis', 'Rugby', 'Cricket', 'Golf',
+    'Cycling', 'Volleyball', 'Handball', 'Australian Football', 'Esports',
+  ];
+  // Well-known leagues guaranteed to appear (free API key returns limited results)
+  const WELL_KNOWN_LEAGUES: { sport: string; id: number; name: string }[] = [
+    { sport: 'Soccer', id: 4332, name: 'Italian Serie A' },
+    { sport: 'Soccer', id: 4329, name: 'Italian Serie B' },
+    { sport: 'Soccer', id: 4328, name: 'English Premier League' },
+    { sport: 'Soccer', id: 4335, name: 'Scottish Premiership' },
+    { sport: 'Soccer', id: 4337, name: 'Spanish La Liga' },
+    { sport: 'Soccer', id: 4331, name: 'German Bundesliga' },
+    { sport: 'Soccer', id: 4334, name: 'French Ligue 1' },
+    { sport: 'Soccer', id: 4339, name: 'Dutch Eredivisie' },
+    { sport: 'Soccer', id: 4344, name: 'Portuguese Primeira Liga' },
+    { sport: 'Soccer', id: 4357, name: 'Turkish Super Lig' },
+    { sport: 'Soccer', id: 4351, name: 'Brazilian Serie A' },
+    { sport: 'Soccer', id: 4350, name: 'Mexican Liga MX' },
+    { sport: 'Soccer', id: 4346, name: 'American Major League Soccer' },
+    { sport: 'Soccer', id: 4480, name: 'UEFA Champions League' },
+    { sport: 'Soccer', id: 4481, name: 'UEFA Europa League' },
+    { sport: 'Soccer', id: 4502, name: 'UEFA Conference League' },
+    { sport: 'Soccer', id: 4482, name: 'FA Cup' },
+    { sport: 'Soccer', id: 4483, name: 'EFL Cup (Carabao)' },
+    { sport: 'Basketball', id: 4387, name: 'NBA' },
+    { sport: 'Basketball', id: 4431, name: 'EuroLeague' },
+    { sport: 'Ice Hockey', id: 4380, name: 'NHL' },
+    { sport: 'American Football', id: 4391, name: 'NFL' },
+    { sport: 'Baseball', id: 4424, name: 'MLB' },
+    { sport: 'Fighting', id: 4443, name: 'UFC' },
+    { sport: 'Motorsport', id: 4370, name: 'Formula 1' },
+    { sport: 'Motorsport', id: 4407, name: 'MotoGP' },
+    { sport: 'Motorsport', id: 4393, name: 'NASCAR Cup Series' },
+    { sport: 'Tennis', id: 4464, name: 'ATP World Tour' },
+    { sport: 'Tennis', id: 4463, name: 'WTA Tour' },
+    { sport: 'Rugby', id: 4401, name: 'Six Nations' },
+    { sport: 'Cricket', id: 4472, name: 'IPL' },
+    { sport: 'Golf', id: 4396, name: 'PGA Tour' },
+  ];
+  let leaguesCache: { data: any; ts: number; key: string } | null = null;
+  const LEAGUES_CACHE_TTL = 3600000;
+
+  app.get("/api/admin/sportsdb-leagues", async (req, res) => {
+    try {
+      const settings = storage.getSettings();
+      const apiKey = settings?.widgetApiKey || '3';
+
+      if (leaguesCache && leaguesCache.key === apiKey && Date.now() - leaguesCache.ts < LEAGUES_CACHE_TTL) {
+        return res.json(leaguesCache.data);
+      }
+
+      const base = `https://www.thesportsdb.com/api/v1/json/${encodeURIComponent(apiKey)}`;
+
+      // Fetch from both endpoints in parallel and merge (free key limits per-sport results)
+      const [allLeaguesRes, ...perSportResults] = await Promise.allSettled([
+        fetch(`${base}/all_leagues.php`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => (data?.leagues || []) as any[]),
+        ...SPORTSDB_SPORTS.map(sport =>
+          fetch(`${base}/search_all_leagues.php?s=${encodeURIComponent(sport)}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => ({ sport, leagues: (data?.countries || []) as any[] }))
+        )
+      ]);
+
+      const seen = new Set<number>();
+      const grouped: Record<string, { id: number; name: string }[]> = {};
+
+      function addLeague(sport: string, id: number, name: string) {
+        if (seen.has(id) || !name) return;
+        seen.add(id);
+        if (!grouped[sport]) grouped[sport] = [];
+        grouped[sport].push({ id, name });
+      }
+
+      // 1. Well-known leagues always present
+      for (const l of WELL_KNOWN_LEAGUES) addLeague(l.sport, l.id, l.name);
+
+      // 2. all_leagues.php returns featured/major leagues
+      if (allLeaguesRes.status === 'fulfilled' && allLeaguesRes.value) {
+        for (const l of allLeaguesRes.value) {
+          addLeague(l.strSport || '', Number(l.idLeague), l.strLeague || '');
+        }
+      }
+
+      // 3. search_all_leagues per sport adds more leagues
+      for (const r of perSportResults) {
+        if (r.status !== 'fulfilled' || !r.value.leagues.length) continue;
+        for (const l of r.value.leagues) {
+          addLeague(r.value.sport, Number(l.idLeague), l.strLeague || '');
+        }
+      }
+
+      for (const sport of Object.keys(grouped)) {
+        grouped[sport].sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      const result = { grouped };
+      leaguesCache = { data: result, ts: Date.now(), key: apiKey };
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/admin/widget-settings", (req, res) => {
     try {
       const settings = storage.getSettings();
@@ -1285,6 +1369,8 @@ iframe {
         widgetLanguage: settings?.widgetLanguage || 'en-CA',
         widgetSource: settings?.widgetSource || 'futbolenlatv',
         widgetApiKey: settings?.widgetApiKey || '',
+        widgetSportsdbSport: settings?.widgetSportsdbSport || 'Soccer',
+        widgetSportsdbLeagues: settings?.widgetSportsdbLeagues || '',
         widgetTvCountry: settings?.widgetTvCountry || 'italy',
         widgetTvMap: settings?.widgetTvMap || '',
         widgetTimezone: settings?.widgetTimezone || 'Europe/Rome',
@@ -1309,6 +1395,8 @@ iframe {
         widgetLanguage,
         widgetSource,
         widgetApiKey,
+        widgetSportsdbSport,
+        widgetSportsdbLeagues,
         widgetTvCountry,
         widgetTvMap,
         widgetTimezone,
@@ -1327,6 +1415,8 @@ iframe {
         widgetLanguage,
         widgetSource,
         widgetApiKey,
+        widgetSportsdbSport,
+        widgetSportsdbLeagues,
         widgetTvCountry,
         widgetTvMap,
         widgetTimezone,

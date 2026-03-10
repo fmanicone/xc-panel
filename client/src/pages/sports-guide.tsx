@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,16 @@ const sports = [
   { value: "cricket", label: "Cricket" },
 ];
 
+// TheSportsDB leagues - fetched dynamically from API
+interface SportsdbLeague {
+  id: number;
+  name: string;
+}
+
+interface SportsdbGrouped {
+  [sport: string]: SportsdbLeague[];
+}
+
 const languages = [
   { value: "en-CA", label: "English" },
   { value: "fr-FR", label: "French" },
@@ -108,26 +118,6 @@ const timezones = [
   { value: "Asia/Dubai", label: "Dubai (GST)" },
   { value: "Asia/Riyadh", label: "Arabia Saudita (AST)" },
 ];
-
-const leagueNames: Record<string, string> = {
-  "4328": "English Premier League",
-  "4335": "Scottish Premiership",
-  "4331": "German Bundesliga",
-  "4332": "Italian Serie A",
-  "4334": "French Ligue 1",
-  "4337": "Spanish La Liga",
-  "4339": "Dutch Eredivisie",
-  "4351": "Brazilian Serie A",
-  "4350": "Mexican Liga MX",
-  "4344": "Portuguese Primeira Liga",
-  "4357": "Turkish Super Lig",
-  "4480": "UEFA Champions League",
-  "4481": "UEFA Europa League",
-  "4502": "UEFA Conference League",
-  "4346": "FIFA World Cup",
-  "4482": "FA Cup",
-  "4483": "EFL Cup (Carabao)",
-};
 
 const tvPresets: Record<string, Record<string, string>> = {
   italy: {
@@ -184,6 +174,8 @@ interface WidgetSettings {
   widgetLanguage: string;
   widgetSource: string;
   widgetApiKey: string;
+  widgetSportsdbSport: string;
+  widgetSportsdbLeagues: string;
   widgetTvCountry: string;
   widgetTvMap: string;
   widgetTimezone: string;
@@ -204,13 +196,34 @@ export default function SportsGuide() {
   const [sport, setSport] = useState("futbol");
   const [language, setLanguage] = useState("en-CA");
   const [apiKey, setApiKey] = useState("");
+  const [selectedLeagues, setSelectedLeagues] = useState<number[]>([]);
   const [tvCountry, setTvCountry] = useState("italy");
   const [tvMap, setTvMap] = useState<Record<string, string>>(() => ({ ...tvPresets["italy"] }));
   const [timezone, setTimezone] = useState("Europe/Rome");
+  const [leagueSearch, setLeagueSearch] = useState("");
 
   const { data: settings, isLoading } = useQuery<WidgetSettings>({
     queryKey: ["/api/admin/widget-settings"],
   });
+
+  const { data: sportsdbData, isLoading: leaguesLoading } = useQuery<{ grouped: SportsdbGrouped }>({
+    queryKey: ["/api/admin/sportsdb-leagues"],
+    enabled: widgetSource === "thesportsdb",
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const selectedSet = useMemo(() => new Set(selectedLeagues), [selectedLeagues]);
+
+  const leagueNameMap = useMemo(() => {
+    if (!sportsdbData?.grouped) return new Map<number, string>();
+    const entries: [number, string][] = [];
+    for (const leagues of Object.values(sportsdbData.grouped)) {
+      for (const l of leagues) entries.push([l.id, l.name]);
+    }
+    return new Map(entries);
+  }, [sportsdbData]);
+
+  const searchLower = leagueSearch.toLowerCase();
 
   const saveMutation = useMutation({
     mutationFn: async (data: WidgetSettings) => {
@@ -246,6 +259,12 @@ export default function SportsGuide() {
       setLanguage(settings.widgetLanguage || "en-CA");
       setWidgetSource((settings.widgetSource || "futbolenlatv") as "futbolenlatv" | "thesportsdb");
       setApiKey(settings.widgetApiKey || "");
+      if (settings.widgetSportsdbLeagues) {
+        try {
+          const parsed = JSON.parse(settings.widgetSportsdbLeagues);
+          if (Array.isArray(parsed) && parsed.length > 0) setSelectedLeagues(parsed);
+        } catch {}
+      }
       setTimezone(settings.widgetTimezone || "Europe/Rome");
       const country = settings.widgetTvCountry || "italy";
       setTvCountry(country);
@@ -289,6 +308,8 @@ export default function SportsGuide() {
       widgetLanguage: language,
       widgetSource,
       widgetApiKey: apiKey,
+      widgetSportsdbSport: "",
+      widgetSportsdbLeagues: JSON.stringify(selectedLeagues),
       widgetTvCountry: tvCountry,
       widgetTvMap: JSON.stringify(tvMap),
       widgetTimezone: timezone,
@@ -354,6 +375,84 @@ export default function SportsGuide() {
                 />
               </div>
 
+              <div className="space-y-4">
+                <Label>Sports &amp; Leagues</Label>
+                <Input
+                  type="text"
+                  placeholder="Search leagues..."
+                  value={leagueSearch}
+                  onChange={(e) => setLeagueSearch(e.target.value)}
+                  className="max-w-sm"
+                />
+                {leaguesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading leagues from TheSportsDB...
+                  </div>
+                ) : sportsdbData?.grouped ? (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {Object.entries(sportsdbData.grouped).map(([sportName, leagues]) => {
+                      const filtered = searchLower
+                        ? leagues.filter(l => l.name.toLowerCase().includes(searchLower))
+                        : leagues;
+                      if (filtered.length === 0) return null;
+                      const groupLeagueIds = filtered.map(l => l.id);
+                      const allSelected = groupLeagueIds.length > 0 && groupLeagueIds.every(id => selectedSet.has(id));
+                      const someSelected = groupLeagueIds.some(id => selectedSet.has(id));
+                      return (
+                        <div key={sportName} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`sport-group-${sportName}`}
+                              checked={allSelected}
+                              className={!allSelected && someSelected ? "opacity-60" : ""}
+                              onCheckedChange={(checked) => {
+                                setSelectedLeagues(prev => {
+                                  if (checked) {
+                                    const next = [...prev];
+                                    for (const id of groupLeagueIds) {
+                                      if (!next.includes(id)) next.push(id);
+                                    }
+                                    return next;
+                                  }
+                                  return prev.filter(id => !groupLeagueIds.includes(id));
+                                });
+                              }}
+                            />
+                            <Label htmlFor={`sport-group-${sportName}`} className="font-semibold cursor-pointer">
+                              {sportName}
+                            </Label>
+                          </div>
+                          <div className="ml-6 space-y-1 max-h-60 overflow-y-auto">
+                            {filtered.map((league) => (
+                              <div key={league.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`league-${league.id}`}
+                                  checked={selectedSet.has(league.id)}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedLeagues(prev => {
+                                      if (checked) return [...prev, league.id];
+                                      return prev.filter(id => id !== league.id);
+                                    });
+                                  }}
+                                />
+                                <Label htmlFor={`league-${league.id}`} className="text-sm cursor-pointer">
+                                  {league.name}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Enter an API key and save to load leagues.</p>
+                )}
+                {selectedLeagues.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{selectedLeagues.length} league(s) selected</p>
+                )}
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Language</Label>
@@ -387,41 +486,48 @@ export default function SportsGuide() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>TV Channels Preset</Label>
-                <Select value={tvCountry} onValueChange={handleTvCountryChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select country..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tvCountryOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Select a country preset or customize each league channel below. Editing any channel switches to Custom.
-                </p>
-              </div>
+              {selectedLeagues.length > 0 && (
+                <>
+                  <div className="space-y-2">
+                    <Label>TV Channels Preset</Label>
+                    <Select value={tvCountry} onValueChange={handleTvCountryChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select country..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tvCountryOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Select a country preset or customize each league channel below. Editing any channel switches to Custom.
+                    </p>
+                  </div>
 
-              <div className="space-y-3">
-                <Label>TV Channels per League</Label>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {Object.entries(leagueNames).map(([id, name]) => (
-                    <div key={id} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{name}</Label>
-                      <Input
-                        type="text"
-                        value={tvMap[id] || ""}
-                        onChange={(e) => updateTvChannel(id, e.target.value)}
-                        placeholder="Channel name..."
-                      />
+                  <div className="space-y-3">
+                    <Label>TV Channels per League</Label>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {selectedLeagues.map((leagueId) => (
+                        <div key={leagueId} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">
+                            {leagueNameMap.get(leagueId) || `League ${leagueId}`}
+                          </Label>
+                          <Input
+                            type="text"
+                            value={tvMap[String(leagueId)] || ""}
+                            onChange={(e) => updateTvChannel(String(leagueId), e.target.value)}
+                            placeholder="Channel name..."
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
+
             </div>
           ) : (
             <>

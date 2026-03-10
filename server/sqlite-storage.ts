@@ -72,6 +72,8 @@ export interface SqliteSettings {
   widgetLanguage: string;
   widgetSource: string;
   widgetApiKey: string;
+  widgetSportsdbSport: string;
+  widgetSportsdbLeagues: string;
   widgetTvCountry: string;
   widgetTvMap: string;
   widgetTimezone: string;
@@ -272,6 +274,8 @@ function rowToSettings(row: any): SqliteSettings {
     widgetLanguage: row.widget_language || 'en-CA',
     widgetSource: row.widget_source || 'futbolenlatv',
     widgetApiKey: row.widget_api_key || '',
+    widgetSportsdbSport: row.widget_sportsdb_sport || 'Soccer',
+    widgetSportsdbLeagues: row.widget_sportsdb_leagues || '',
     widgetTvCountry: row.widget_tv_country || 'italy',
     widgetTvMap: row.widget_tv_map || '',
     widgetTimezone: row.widget_timezone || 'Europe/Rome',
@@ -461,6 +465,8 @@ export const sqliteStorage = {
       widgetLanguage: 'widget_language',
       widgetSource: 'widget_source',
       widgetApiKey: 'widget_api_key',
+      widgetSportsdbSport: 'widget_sportsdb_sport',
+      widgetSportsdbLeagues: 'widget_sportsdb_leagues',
       widgetTvCountry: 'widget_tv_country',
       widgetTvMap: 'widget_tv_map',
       widgetTimezone: 'widget_timezone',
