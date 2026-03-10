@@ -77,6 +77,7 @@ export interface SqliteSettings {
   widgetTvCountry: string;
   widgetTvMap: string;
   widgetTimezone: string;
+  widgetTimeFormat: string;
   backdropEnabled: string;
   backdropApiKey: string;
   backdropPageCount: string;
@@ -279,6 +280,7 @@ function rowToSettings(row: any): SqliteSettings {
     widgetTvCountry: row.widget_tv_country || 'italy',
     widgetTvMap: row.widget_tv_map || '',
     widgetTimezone: row.widget_timezone || 'Europe/Rome',
+    widgetTimeFormat: row.widget_time_format || '24h',
     backdropEnabled: row.backdrop_enabled || 'true',
     backdropApiKey: row.backdrop_api_key || '6b8e3eaa1a03ebb45642e9531d8a76d2',
     backdropPageCount: row.backdrop_page_count || '15',
@@ -470,6 +472,7 @@ export const sqliteStorage = {
       widgetTvCountry: 'widget_tv_country',
       widgetTvMap: 'widget_tv_map',
       widgetTimezone: 'widget_timezone',
+      widgetTimeFormat: 'widget_time_format',
       backdropEnabled: 'backdrop_enabled',
       backdropApiKey: 'backdrop_api_key',
       backdropPageCount: 'backdrop_page_count',

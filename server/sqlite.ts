@@ -114,6 +114,7 @@ const widgetColumns = [
   { name: 'widget_tv_country', def: "TEXT DEFAULT 'italy'" },
   { name: 'widget_tv_map', def: "TEXT DEFAULT ''" },
   { name: 'widget_timezone', def: "TEXT DEFAULT 'Europe/Rome'" },
+  { name: 'widget_time_format', def: "TEXT DEFAULT '24h'" },
   { name: 'backdrop_enabled', def: "TEXT DEFAULT 'true'" },
   { name: 'backdrop_api_key', def: "TEXT DEFAULT '6b8e3eaa1a03ebb45642e9531d8a76d2'" },
   { name: 'backdrop_page_count', def: "TEXT DEFAULT '15'" },

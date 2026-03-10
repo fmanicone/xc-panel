@@ -951,20 +951,62 @@ export async function registerRoutes(
     }
   });
 
+  // Server-side TheSportsDB events cache (30 min TTL)
+  let eventsCache: { data: any[]; ts: number; key: string } | null = null;
+  const EVENTS_CACHE_TTL = 1800000; // 30 min
+
+  async function fetchSportsdbEvents(apiKey: string, leagueIds: number[]): Promise<any[]> {
+    const cacheKey = apiKey + ':' + leagueIds.join(',');
+    if (eventsCache && eventsCache.key === cacheKey && Date.now() - eventsCache.ts < EVENTS_CACHE_TTL) {
+      return eventsCache.data;
+    }
+
+    const now = new Date();
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      days.push(d.toISOString().split('T')[0]);
+    }
+
+    const leagueSet = new Set(leagueIds.map(String));
+    const allEvents: any[] = [];
+    const seen = new Set<string>();
+
+    const results = await Promise.allSettled(
+      days.map(day =>
+        fetch(`https://www.thesportsdb.com/api/v1/json/${encodeURIComponent(apiKey)}/eventsday.php?d=${day}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => data?.events || [])
+      )
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+        for (const e of r.value) {
+          if (leagueSet.has(String(e.idLeague)) && !seen.has(e.idEvent)) {
+            seen.add(e.idEvent);
+            allEvents.push(e);
+          }
+        }
+      }
+    }
+
+    eventsCache = { data: allEvents, ts: Date.now(), key: cacheKey };
+    return allEvents;
+  }
+
   app.get("/api/sport.php", async (req, res) => {
     try {
       const settings = storage.getSettings();
       const widgetSource = settings?.widgetSource || 'futbolenlatv';
 
       if (widgetSource === 'thesportsdb') {
-        // TheSportsDB source - client-side fetching to avoid server IP rate limits
         const apiKey = settings?.widgetApiKey || '123';
-
-        // TV map: use saved custom map, or saved preset map from settings
         const tvMapJson = settings?.widgetTvMap || '{}';
-
         const widgetLang = settings?.widgetLanguage || 'it-IT';
         const widgetTz = settings?.widgetTimezone || 'Europe/Rome';
+        const widgetTimeFormat = settings?.widgetTimeFormat || '24h';
 
         let selectedLeagueIds: number[] = [];
         const leaguesRaw = settings?.widgetSportsdbLeagues;
@@ -974,6 +1016,9 @@ export async function registerRoutes(
             if (Array.isArray(parsed)) selectedLeagueIds = parsed;
           } catch {}
         }
+
+        // Fetch events server-side (cached 30 min)
+        const cachedEvents = await fetchSportsdbEvents(apiKey, selectedLeagueIds);
 
         res.setHeader("Content-Type", "text/html");
         res.send(`<!DOCTYPE html>
@@ -1022,48 +1067,21 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
 </div>
 <script>
 (function(){
-  var API_KEY=${JSON.stringify(apiKey)},LANG=${JSON.stringify(widgetLang)},TZ=${JSON.stringify(widgetTz)};
+  var LANG=${JSON.stringify(widgetLang)},TZ=${JSON.stringify(widgetTz)},TIME_FORMAT=${JSON.stringify(widgetTimeFormat)};
   var tvMap=${tvMapJson};
-  var leagues=${JSON.stringify(selectedLeagueIds)};
   var now=new Date(),todayStr=now.toISOString().split('T')[0];
-  var maxDate=new Date(now);maxDate.setDate(maxDate.getDate()+7);
-  var CACHE_KEY='sportsdb_badges',CACHE_TTL=86400000; // 24h
 
-  // Badge cache with localStorage persistence
-  var badgeCache={};
-  try{
-    var stored=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');
-    if(stored._ts&&Date.now()-stored._ts<CACHE_TTL){badgeCache=stored;delete badgeCache._ts}
-  }catch(e){}
-
-  function saveBadgeCache(){
-    try{var o=Object.assign({},badgeCache,{_ts:Date.now()});localStorage.setItem(CACHE_KEY,JSON.stringify(o))}catch(e){}
+  // Events pre-fetched server-side (cached 30 min)
+  var rawEvents=${JSON.stringify(cachedEvents)};
+  var events=[],activeLeagues={};
+  for(var i=0;i<rawEvents.length;i++){
+    var e=rawEvents[i];
+    e.strTVStation=tvMap[e.idLeague]||e.strTVStation||'';
+    events.push(e);
+    activeLeagues[e.idLeague]=e.strLeague;
   }
-
-  // Fetch events
-  var events=[],seen={},activeLeagues={};
-  var leagueSet=new Set(leagues.map(String));
-
-  function fetchLeague(id){
-    var url='https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/eventsnextleague.php?id='+id;
-    return fetch(url).then(function(r){return r.json()}).then(function(data){
-      if(!data||!data.events)return;
-      for(var i=0;i<data.events.length;i++){
-        var e=data.events[i],ed=new Date(e.dateEvent+'T00:00:00');
-        if(!leagueSet.has(String(e.idLeague)))continue;
-        if(ed>=new Date(todayStr+'T00:00:00')&&ed<=maxDate&&!seen[e.idEvent]){
-          e.strTVStation=tvMap[e.idLeague]||e.strTVStation||'';
-          events.push(e);seen[e.idEvent]=1;activeLeagues[e.idLeague]=e.strLeague;
-        }
-      }
-    }).catch(function(){});
-  }
-
-  Promise.all(leagues.map(fetchLeague)).then(function(){
-    events.sort(function(a,b){return new Date(a.dateEvent+'T'+a.strTime).getTime()-new Date(b.dateEvent+'T'+b.strTime).getTime()});
-    render();
-    loadBadges();
-  });
+  events.sort(function(a,b){return new Date(a.dateEvent+'T'+a.strTime).getTime()-new Date(b.dateEvent+'T'+b.strTime).getTime()});
+  render();
 
   function render(){
     // Date nav - only dates that have events
@@ -1105,8 +1123,8 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
         grid=document.createElement('div');grid.className='grid';container.appendChild(grid);
       }
       var utc=new Date(e.dateEvent+'T'+(e.strTime||'00:00:00').substring(0,8)+'Z');
-      var time=utc.toLocaleTimeString(LANG,{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:TZ});
-      var hb=badgeCache[e.strHomeTeam]||'',ab=badgeCache[e.strAwayTeam]||'';
+      var time=utc.toLocaleTimeString(LANG,{hour:'2-digit',minute:'2-digit',hour12:TIME_FORMAT==='12h',timeZone:TZ});
+      var hb=e.strHomeTeamBadge||'',ab=e.strAwayTeamBadge||'';
       var card=document.createElement('div');card.className='card match-card';card.setAttribute('data-league',e.idLeague);card.setAttribute('data-date',e.dateEvent);
       var isTeamMatch=e.strHomeTeam&&e.strAwayTeam&&e.strHomeTeam!==e.strAwayTeam;
       if(isTeamMatch){
@@ -1122,35 +1140,6 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
 
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
-  // Load badges progressively after render
-  function loadBadges(){
-    var names=new Set();
-    events.forEach(function(e){if(e.strHomeTeam&&e.strAwayTeam&&e.strHomeTeam!==e.strAwayTeam){names.add(e.strHomeTeam);names.add(e.strAwayTeam)}});
-    // Skip teams already cached
-    var toFetch=[];
-    names.forEach(function(n){if(!badgeCache[n])toFetch.push(n)});
-    if(!toFetch.length)return;
-
-    var idx=0;
-    function next(){
-      if(idx>=toFetch.length){saveBadgeCache();return}
-      var batch=toFetch.slice(idx,idx+5);idx+=5;
-      Promise.all(batch.map(function(name){
-        return fetch('https://www.thesportsdb.com/api/v1/json/'+API_KEY+'/searchteams.php?t='+encodeURIComponent(name))
-          .then(function(r){return r.json()})
-          .then(function(data){
-            if(data&&data.teams&&data.teams[0]&&data.teams[0].strBadge){
-              badgeCache[name]=data.teams[0].strBadge;
-              // Update all matching badge images immediately
-              document.querySelectorAll('img[data-team="'+CSS.escape(name)+'"]').forEach(function(img){
-                img.src=badgeCache[name];img.style.display='';
-              });
-            }
-          }).catch(function(){});
-      })).then(next);
-    }
-    next();
-  }
 })();
 
 var currentDateFilter=null,currentLeagueFilter='all';
@@ -1374,6 +1363,7 @@ iframe {
         widgetTvCountry: settings?.widgetTvCountry || 'italy',
         widgetTvMap: settings?.widgetTvMap || '',
         widgetTimezone: settings?.widgetTimezone || 'Europe/Rome',
+        widgetTimeFormat: settings?.widgetTimeFormat || '24h',
       });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
@@ -1400,6 +1390,7 @@ iframe {
         widgetTvCountry,
         widgetTvMap,
         widgetTimezone,
+        widgetTimeFormat,
       } = req.body;
 
       storage.updateSettings({
@@ -1420,6 +1411,7 @@ iframe {
         widgetTvCountry,
         widgetTvMap,
         widgetTimezone,
+        widgetTimeFormat,
       });
       
       res.json({ success: true });

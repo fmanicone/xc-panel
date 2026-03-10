@@ -179,6 +179,7 @@ interface WidgetSettings {
   widgetTvCountry: string;
   widgetTvMap: string;
   widgetTimezone: string;
+  widgetTimeFormat: string;
 }
 
 export default function SportsGuide() {
@@ -200,6 +201,7 @@ export default function SportsGuide() {
   const [tvCountry, setTvCountry] = useState("italy");
   const [tvMap, setTvMap] = useState<Record<string, string>>(() => ({ ...tvPresets["italy"] }));
   const [timezone, setTimezone] = useState("Europe/Rome");
+  const [timeFormat, setTimeFormat] = useState("24h");
   const [leagueSearch, setLeagueSearch] = useState("");
 
   const { data: settings, isLoading } = useQuery<WidgetSettings>({
@@ -266,6 +268,7 @@ export default function SportsGuide() {
         } catch {}
       }
       setTimezone(settings.widgetTimezone || "Europe/Rome");
+      setTimeFormat(settings.widgetTimeFormat || "24h");
       const country = settings.widgetTvCountry || "italy";
       setTvCountry(country);
       if (country === "custom" && settings.widgetTvMap) {
@@ -313,6 +316,7 @@ export default function SportsGuide() {
       widgetTvCountry: tvCountry,
       widgetTvMap: JSON.stringify(tvMap),
       widgetTimezone: timezone,
+      widgetTimeFormat: timeFormat,
     });
   };
 
@@ -481,6 +485,18 @@ export default function SportsGuide() {
                           {tz.label}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Time Format</Label>
+                  <Select value={timeFormat} onValueChange={setTimeFormat}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select format..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24h">24h (14:30)</SelectItem>
+                      <SelectItem value="12h">12h (2:30 PM)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
