@@ -955,16 +955,19 @@ export async function registerRoutes(
   let eventsCache: { data: any[]; ts: number; key: string } | null = null;
   const EVENTS_CACHE_TTL = 1800000; // 30 min
 
-  async function fetchSportsdbEvents(apiKey: string, leagueIds: number[]): Promise<any[]> {
-    const cacheKey = apiKey + ':' + leagueIds.join(',');
+  async function fetchSportsdbEvents(apiKey: string, leagueIds: number[], timezone: string = 'Europe/Rome'): Promise<any[]> {
+    const cacheKey = apiKey + ':' + leagueIds.join(',') + ':' + timezone;
     if (eventsCache && eventsCache.key === cacheKey && Date.now() - eventsCache.ts < EVENTS_CACHE_TTL) {
       return eventsCache.data;
     }
 
+    // Use configured timezone to determine "today" correctly
     const now = new Date();
+    const todayInTz = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(now);
+    const baseDate = new Date(todayInTz + 'T12:00:00');
     const days: string[] = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
+      const d = new Date(baseDate);
       d.setDate(d.getDate() + i);
       days.push(d.toISOString().split('T')[0]);
     }
@@ -1018,7 +1021,7 @@ export async function registerRoutes(
         }
 
         // Fetch events server-side (cached 30 min)
-        const cachedEvents = await fetchSportsdbEvents(apiKey, selectedLeagueIds);
+        const cachedEvents = await fetchSportsdbEvents(apiKey, selectedLeagueIds, widgetTz);
 
         res.setHeader("Content-Type", "text/html");
         res.send(`<!DOCTYPE html>
@@ -1069,7 +1072,7 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
 (function(){
   var LANG=${JSON.stringify(widgetLang)},TZ=${JSON.stringify(widgetTz)},TIME_FORMAT=${JSON.stringify(widgetTimeFormat)};
   var tvMap=${tvMapJson};
-  var now=new Date(),todayStr=now.toISOString().split('T')[0];
+  var now=new Date();function dateInTz(dt){return dt.toLocaleDateString('en-CA',{timeZone:TZ})}var todayStr=dateInTz(now);
 
   // Events pre-fetched server-side (cached 30 min)
   var rawEvents=${JSON.stringify(cachedEvents)};
@@ -1090,7 +1093,7 @@ body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scrol
     var dateNav=document.getElementById('dateNav');
     for(var i=0;i<7;i++){
       var d=new Date(now);d.setDate(d.getDate()+i);
-      var ds=d.toISOString().split('T')[0];
+      var ds=dateInTz(d);
       if(!eventDates.has(ds))continue;
       var a=document.createElement('a');
       a.className='nav-item';a.setAttribute('data-datefilter',ds);
