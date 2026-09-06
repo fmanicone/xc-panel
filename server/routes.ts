@@ -1044,7 +1044,7 @@ export async function registerRoutes(
 
       if (source === 'apifootball') {
         const key = settings?.widgetApiKey || '';
-        const majors = leagueIds.length ? leagueIds : [135, 2, 39, 140, 78, 61];
+        const majors = leagueIds.length ? leagueIds : [135, 136, 138, 137, 39, 140, 78, 61, 2, 3, 848, 94, 88];
         const raw = await fetchApiFootballEvents(key, majors, tz);
         const LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT']);
         const events = raw.map((f: any) => {

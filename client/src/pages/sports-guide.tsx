@@ -394,9 +394,9 @@ export default function SportsGuide() {
                   type="text"
                   value={afLeaguesText}
                   onChange={(e) => setAfLeaguesText(e.target.value)}
-                  placeholder="135, 2, 39, 140, 78, 61"
+                  placeholder="135, 136, 138, 39, 140, 78, 61, 2, 3"
                 />
-                <p className="text-xs text-muted-foreground">Serie A=135, Champions=2, Premier=39, La Liga=140, Bundesliga=78, Ligue 1=61. Vuoto = tutti questi.</p>
+                <p className="text-xs text-muted-foreground">Serie A=135, Serie B=136, Serie C=138, Coppa Italia=137 · Premier=39, La Liga=140, Bundesliga=78, Ligue 1=61 · Champions=2, Europa=3, Conference=848, Eredivisie=88, Primeira=94. Vuoto = tutti questi. (Solo calcio: la Formula 1 usa un altro servizio.)</p>
               </div>
             </div>
           ) : widgetSource === "thesportsdb" ? (
