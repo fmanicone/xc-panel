@@ -1003,6 +1003,50 @@ export async function registerRoutes(
     return allEvents;
   }
 
+  app.get("/api/sport.json", async (req, res) => {
+    try {
+      const settings = storage.getSettings();
+      if ((settings?.widgetSource || 'futbolenlatv') !== 'thesportsdb') return res.json({ events: [] });
+      const apiKey = settings?.widgetApiKey || '123';
+      const tz = settings?.widgetTimezone || 'Europe/Rome';
+      let leagueIds: number[] = [];
+      try { const p = JSON.parse(settings?.widgetSportsdbLeagues || '[]'); if (Array.isArray(p)) leagueIds = p; } catch {}
+      let tvMap: Record<string, string> = {};
+      try { tvMap = JSON.parse(settings?.widgetTvMap || '{}') || {}; } catch {}
+      const raw = await fetchSportsdbEvents(apiKey, leagueIds, tz);
+      const FIN = new Set(['FT', 'AET', 'PEN', 'Match Finished', 'AOT']);
+      const NOTSTARTED = new Set(['', 'NS', 'Not Started', 'TBD', 'Postponed', 'Cancelled']);
+      const now = Date.now();
+      const events = (raw || []).map((e: any) => {
+        const status = String(e.strStatus || '').trim();
+        const hs = e.intHomeScore, as = e.intAwayScore;
+        const hasScore = hs !== null && hs !== undefined && hs !== '' && as !== null && as !== undefined && as !== '';
+        const finished = FIN.has(status);
+        const ts = e.strTimestamp ? Date.parse(e.strTimestamp + 'Z') : NaN;
+        const started = hasScore || (!isNaN(ts) && ts <= now);
+        const live = started && !finished && !NOTSTARTED.has(status);
+        let time = '';
+        if (!isNaN(ts)) time = new Intl.DateTimeFormat('it-IT', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(new Date(ts));
+        return {
+          id: String(e.idEvent || ''),
+          league: e.strLeague || '',
+          home: e.strHomeTeam || '', away: e.strAwayTeam || '',
+          homeBadge: e.strHomeTeamBadge || '', awayBadge: e.strAwayTeamBadge || '',
+          homeScore: hasScore ? Number(hs) : null, awayScore: hasScore ? Number(as) : null,
+          status: live ? 'LIVE' : (finished ? 'FT' : 'NS'),
+          progress: live ? (e.strProgress || status || '') : '',
+          time,
+          channel: tvMap[e.idLeague] || e.strTVStation || '',
+        };
+      }).filter((e: any) => e.home && e.away);
+      // live first, then by time
+      events.sort((a: any, b: any) => (a.status === 'LIVE' ? 0 : 1) - (b.status === 'LIVE' ? 0 : 1));
+      res.json({ events });
+    } catch {
+      res.json({ events: [] });
+    }
+  });
+
   app.get("/api/sport.php", async (req, res) => {
     try {
       const settings = storage.getSettings();
