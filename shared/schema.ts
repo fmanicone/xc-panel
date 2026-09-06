@@ -46,6 +46,7 @@ export const settings = pgTable("settings", {
   
   // Feature Toggles (single values)
   loginAccountsButton: text("login_accounts_button").default("Enabled"),
+  mqttEnabled: text("mqtt_enabled").default("Enabled"),
   loginSettingsButton: text("login_settings_button").default("Enabled"),
   signupButton: text("signup_button").default("Disabled"),
   signupUrl: text("signup_url").default(""),

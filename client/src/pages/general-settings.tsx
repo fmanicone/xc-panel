@@ -178,6 +178,16 @@ export default function GeneralSettings() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
+                    <Label>MQTT / QR Login</Label>
+                    <p className="text-xs text-muted-foreground">Show QR code on login (disable to hide it)</p>
+                  </div>
+                  <Switch
+                    checked={settings.mqttEnabled !== "Disabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, mqttEnabled: v ? "Enabled" : "Disabled" })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
                     <Label>Settings Button</Label>
                     <p className="text-xs text-muted-foreground">Show settings access</p>
                   </div>

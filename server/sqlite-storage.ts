@@ -7,6 +7,7 @@ export interface SqliteSettings {
   versionCode: string;
   loginType: string;
   loginAccountsButton: string;
+  mqttEnabled: string;
   loginSettingsButton: string;
   signupButton: string;
   signupUrl: string;
@@ -210,6 +211,7 @@ function rowToSettings(row: any): SqliteSettings {
     versionCode: row.version_code,
     loginType: row.login_type,
     loginAccountsButton: row.login_accounts_button,
+    mqttEnabled: row.mqtt_enabled,
     loginSettingsButton: row.login_settings_button,
     signupButton: row.signup_button,
     signupUrl: row.signup_url,
@@ -400,6 +402,7 @@ export const sqliteStorage = {
       versionCode: 'version_code',
       loginType: 'login_type',
       loginAccountsButton: 'login_accounts_button',
+      mqttEnabled: 'mqtt_enabled',
       loginSettingsButton: 'login_settings_button',
       signupButton: 'signup_button',
       signupUrl: 'signup_url',

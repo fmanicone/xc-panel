@@ -149,6 +149,7 @@ const widgetColumns = [
   { name: 'video_resize_exo', def: "TEXT DEFAULT '0'" },
   { name: 'video_subtitles_exo', def: "TEXT DEFAULT 'no'" },
   { name: 'apk_auto_update', def: "TEXT DEFAULT 'yes'" },
+  { name: 'mqtt_enabled', def: "TEXT DEFAULT 'Enabled'" },
 ];
 
 for (const col of widgetColumns) {

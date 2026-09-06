@@ -716,7 +716,11 @@ export async function registerRoutes(
 
         // Generate MQTT URL for apps that use MQTT
         const mqttPort = process.env.MQTT_PORT || '1883';
-        const mqttUrl = `tcp://${hostname}:${mqttPort}`;
+        // Se "MQTT / QR Login" è disattivato nel pannello, l'app nasconde il QR al login
+        // (LoginActivity mostra il QR solo se mqtt_url != "0").
+        const mqttUrl = settings.mqttEnabled === "Disabled"
+          ? "0"
+          : `tcp://${hostname}:${mqttPort}`;
 
         const urlsData = " " + JSON.stringify({
           apkurl: settings.apkUrl || "",
