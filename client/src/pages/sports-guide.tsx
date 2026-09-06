@@ -185,7 +185,7 @@ interface WidgetSettings {
 export default function SportsGuide() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"soccer" | "sports">("soccer");
-  const [widgetSource, setWidgetSource] = useState<"futbolenlatv" | "thesportsdb">("futbolenlatv");
+  const [widgetSource, setWidgetSource] = useState<"futbolenlatv" | "thesportsdb" | "apifootball">("futbolenlatv");
 
   const [width, setWidth] = useState("280");
   const [height, setHeight] = useState("500");
@@ -198,6 +198,7 @@ export default function SportsGuide() {
   const [language, setLanguage] = useState("en-CA");
   const [apiKey, setApiKey] = useState("");
   const [selectedLeagues, setSelectedLeagues] = useState<number[]>([]);
+  const [afLeaguesText, setAfLeaguesText] = useState("");
   const [tvCountry, setTvCountry] = useState("italy");
   const [tvMap, setTvMap] = useState<Record<string, string>>(() => ({ ...tvPresets["italy"] }));
   const [timezone, setTimezone] = useState("Europe/Rome");
@@ -259,12 +260,12 @@ export default function SportsGuide() {
       setAllTeams(settings.widgetAllTeams === "true");
       setSport(settings.widgetSport || "futbol");
       setLanguage(settings.widgetLanguage || "en-CA");
-      setWidgetSource((settings.widgetSource || "futbolenlatv") as "futbolenlatv" | "thesportsdb");
+      setWidgetSource((settings.widgetSource || "futbolenlatv") as "futbolenlatv" | "thesportsdb" | "apifootball");
       setApiKey(settings.widgetApiKey || "");
       if (settings.widgetSportsdbLeagues) {
         try {
           const parsed = JSON.parse(settings.widgetSportsdbLeagues);
-          if (Array.isArray(parsed) && parsed.length > 0) setSelectedLeagues(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) { setSelectedLeagues(parsed); setAfLeaguesText(parsed.join(", ")); }
         } catch {}
       }
       setTimezone(settings.widgetTimezone || "Europe/Rome");
@@ -312,7 +313,9 @@ export default function SportsGuide() {
       widgetSource,
       widgetApiKey: apiKey,
       widgetSportsdbSport: "",
-      widgetSportsdbLeagues: JSON.stringify(selectedLeagues),
+      widgetSportsdbLeagues: widgetSource === "apifootball"
+        ? JSON.stringify(afLeaguesText.split(",").map(x => parseInt(x.trim(), 10)).filter(n => !isNaN(n)))
+        : JSON.stringify(selectedLeagues),
       widgetTvCountry: tvCountry,
       widgetTvMap: JSON.stringify(tvMap),
       widgetTimezone: timezone,
@@ -364,10 +367,39 @@ export default function SportsGuide() {
               >
                 TheSportsDB
               </Button>
+              <Button
+                variant={widgetSource === "apifootball" ? "default" : "outline"}
+                onClick={() => setWidgetSource("apifootball")}
+              >
+                API-Football
+              </Button>
             </div>
           </div>
 
-          {widgetSource === "thesportsdb" ? (
+          {widgetSource === "apifootball" ? (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label>API-Football Key (api-sports.io)</Label>
+                <Input
+                  type="text"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="La tua chiave gratuita api-sports.io"
+                />
+                <p className="text-xs text-muted-foreground">Free: 100 richieste/giorno. La Home usa cache 30 min, quindi il limite non è un problema. Loghi squadre e risultati live inclusi.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>League IDs (opzionale, separati da virgola)</Label>
+                <Input
+                  type="text"
+                  value={afLeaguesText}
+                  onChange={(e) => setAfLeaguesText(e.target.value)}
+                  placeholder="135, 2, 39, 140, 78, 61"
+                />
+                <p className="text-xs text-muted-foreground">Serie A=135, Champions=2, Premier=39, La Liga=140, Bundesliga=78, Ligue 1=61. Vuoto = tutti questi.</p>
+              </div>
+            </div>
+          ) : widgetSource === "thesportsdb" ? (
             <div className="space-y-6">
               <div className="space-y-2">
                 <Label>TheSportsDB API Key</Label>

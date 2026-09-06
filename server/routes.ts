@@ -1003,16 +1003,76 @@ export async function registerRoutes(
     return allEvents;
   }
 
+  // --- API-Football (api-sports.io) events, cached 30 min ---
+  let afCache: { data: any[]; ts: number; key: string } | null = null;
+  async function fetchApiFootballEvents(apiKey: string, leagueIds: number[], tz: string): Promise<any[]> {
+    const cacheKey = apiKey + '|' + leagueIds.join(',');
+    if (afCache && afCache.key === cacheKey && Date.now() - afCache.ts < 1800000) return afCache.data;
+    if (!apiKey) return [];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    const wanted = new Set(leagueIds.map(Number));
+    const headers = { 'x-apisports-key': apiKey } as Record<string, string>;
+    const out: any[] = [];
+    const seen = new Set<number>();
+    const push = (arr: any[]) => {
+      for (const f of arr) {
+        const lid = Number(f?.league?.id);
+        if (wanted.size && !wanted.has(lid)) continue;
+        const id = Number(f?.fixture?.id);
+        if (!id || seen.has(id)) continue;
+        seen.add(id); out.push(f);
+      }
+    };
+    const results = await Promise.allSettled([
+      fetch(`https://v3.football.api-sports.io/fixtures?date=${today}`, { headers }).then(r => r.ok ? r.json() : null).then(d => d?.response || []),
+      fetch(`https://v3.football.api-sports.io/fixtures?live=all`, { headers }).then(r => r.ok ? r.json() : null).then(d => d?.response || []),
+    ]);
+    for (const r of results) if (r.status === 'fulfilled' && Array.isArray(r.value)) push(r.value);
+    afCache = { data: out, ts: Date.now(), key: cacheKey };
+    return out;
+  }
+
   app.get("/api/sport.json", async (req, res) => {
     try {
       const settings = storage.getSettings();
-      if ((settings?.widgetSource || 'futbolenlatv') !== 'thesportsdb') return res.json({ events: [] });
-      const apiKey = settings?.widgetApiKey || '123';
+      const source = settings?.widgetSource || 'futbolenlatv';
       const tz = settings?.widgetTimezone || 'Europe/Rome';
       let leagueIds: number[] = [];
       try { const p = JSON.parse(settings?.widgetSportsdbLeagues || '[]'); if (Array.isArray(p)) leagueIds = p; } catch {}
       let tvMap: Record<string, string> = {};
       try { tvMap = JSON.parse(settings?.widgetTvMap || '{}') || {}; } catch {}
+
+      if (source === 'apifootball') {
+        const key = settings?.widgetApiKey || '';
+        const majors = leagueIds.length ? leagueIds : [135, 2, 39, 140, 78, 61];
+        const raw = await fetchApiFootballEvents(key, majors, tz);
+        const LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT']);
+        const events = raw.map((f: any) => {
+          const st = String(f?.fixture?.status?.short || '');
+          const live = LIVE.has(st);
+          const finished = st === 'FT' || st === 'AET' || st === 'PEN';
+          const ts = f?.fixture?.date ? Date.parse(f.fixture.date) : NaN;
+          const time = isNaN(ts) ? '' : new Intl.DateTimeFormat('it-IT', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(new Date(ts));
+          const hs = f?.goals?.home, as = f?.goals?.away;
+          const hasScore = hs !== null && hs !== undefined && as !== null && as !== undefined;
+          return {
+            id: String(f?.fixture?.id || ''),
+            league: f?.league?.name || '',
+            home: f?.teams?.home?.name || '', away: f?.teams?.away?.name || '',
+            homeBadge: f?.teams?.home?.logo || '', awayBadge: f?.teams?.away?.logo || '',
+            homeScore: hasScore ? Number(hs) : null, awayScore: hasScore ? Number(as) : null,
+            status: live ? 'LIVE' : (finished ? 'FT' : 'NS'),
+            progress: live ? (f?.fixture?.status?.elapsed ? f.fixture.status.elapsed + "'" : st) : '',
+            time,
+            channel: tvMap[String(f?.league?.id)] || '',
+          };
+        }).filter((e: any) => e.home && e.away);
+        events.sort((a: any, b: any) => (a.status === 'LIVE' ? 0 : 1) - (b.status === 'LIVE' ? 0 : 1));
+        return res.json({ events });
+      }
+
+      if (source !== 'thesportsdb') return res.json({ events: [] });
+      const apiKey = settings?.widgetApiKey || '123';
       const raw = await fetchSportsdbEvents(apiKey, leagueIds, tz);
       const FIN = new Set(['FT', 'AET', 'PEN', 'Match Finished', 'AOT']);
       const NOTSTARTED = new Set(['', 'NS', 'Not Started', 'TBD', 'Postponed', 'Cancelled']);
