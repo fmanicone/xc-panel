@@ -1112,6 +1112,167 @@ export async function registerRoutes(
       const settings = storage.getSettings();
       const widgetSource = settings?.widgetSource || 'futbolenlatv';
 
+      if (widgetSource === 'apifootball') {
+        const key = settings?.widgetApiKey || '';
+        const tz = settings?.widgetTimezone || 'Europe/Rome';
+        const lang = settings?.widgetLanguage || 'it-IT';
+        const timeFmt = settings?.widgetTimeFormat || '24h';
+        let leagueIds: number[] = [];
+        try { const p = JSON.parse(settings?.widgetSportsdbLeagues || '[]'); if (Array.isArray(p)) leagueIds = p; } catch {}
+        let tvMap: Record<string, string> = {};
+        try { tvMap = JSON.parse(settings?.widgetTvMap || '{}') || {}; } catch {}
+        const majors = leagueIds.length ? leagueIds : [135, 136, 138, 137, 39, 140, 78, 61, 2, 3, 848, 94, 88];
+        const raw = await fetchApiFootballEvents(key, majors, tz);
+        const LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT']);
+        const fmtDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const fmtTime = new Intl.DateTimeFormat(lang, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: timeFmt === '12h' });
+        const events = (raw || []).map((f: any) => {
+          const st = String(f?.fixture?.status?.short || '');
+          const live = LIVE.has(st);
+          const finished = st === 'FT' || st === 'AET' || st === 'PEN';
+          const ts = f?.fixture?.date ? Date.parse(f.fixture.date) : NaN;
+          const d = isNaN(ts) ? null : new Date(ts);
+          const hs = f?.goals?.home, as = f?.goals?.away;
+          const hasScore = hs !== null && hs !== undefined && as !== null && as !== undefined;
+          const leagueId = String(f?.league?.id || '');
+          return {
+            id: String(f?.fixture?.id || ''),
+            leagueId,
+            league: f?.league?.name || '',
+            home: f?.teams?.home?.name || '', away: f?.teams?.away?.name || '',
+            homeBadge: f?.teams?.home?.logo || '', awayBadge: f?.teams?.away?.logo || '',
+            dateEvent: d ? fmtDate.format(d) : '',
+            time: d ? fmtTime.format(d) : '',
+            score: hasScore ? (Number(hs) + ' - ' + Number(as)) : null,
+            statusLabel: live ? (f?.fixture?.status?.elapsed ? f.fixture.status.elapsed + "'" : 'LIVE') : (finished ? 'FT' : (d ? fmtTime.format(d) : '')),
+            live,
+            tv: tvMap[leagueId] || '',
+          };
+        }).filter((e: any) => e.home && e.away && e.dateEvent);
+        events.sort((a: any, b: any) => (a.dateEvent + a.time).localeCompare(b.dateEvent + b.time));
+
+        res.setHeader("Content-Type", "text/html");
+        res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{box-sizing:border-box}
+:root{--neon:#00f2ff;--glass:rgba(255,255,255,.05);--purple:#a0f;--tv-gold:#ffd700;--live:#ff4d4d}
+body{margin:0;background:#000;color:#fff;font-family:'Segoe UI',sans-serif;scroll-behavior:smooth}
+.date-group{scroll-margin-top:140px}
+.header-nav{position:sticky;top:0;background:rgba(17,17,17,.95);backdrop-filter:blur(10px);z-index:100;border-bottom:1px solid var(--neon)}
+.nav-row{display:flex;overflow-x:auto;padding:10px;gap:8px;scrollbar-width:none}
+.nav-row::-webkit-scrollbar{display:none}
+.nav-item{background:#222;padding:8px 12px;border-radius:5px;text-decoration:none;color:#fff;font-size:11px;white-space:nowrap;border:1px solid #444;text-transform:uppercase;font-weight:bold;cursor:pointer}
+.active-filter{border-color:var(--neon);color:var(--neon);background:rgba(0,242,255,.1)}
+.league-item{border-color:var(--purple);color:var(--purple)}
+.container{padding:20px;max-width:1200px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;margin-bottom:40px}
+.card{background:var(--glass);padding:20px;border-radius:20px;border:1px solid #333;text-align:center;transition:border-color .2s}
+.card:hover{border-color:var(--neon)}
+.hidden-match{display:none!important}
+.day-header{border-left:4px solid var(--neon);padding-left:15px;margin:40px 0 20px;text-transform:uppercase;font-weight:900;color:var(--neon)}
+.time-box{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
+.time{color:var(--neon);font-size:18px;font-weight:800}
+.time.live{color:var(--live)}
+.tv-station{font-size:10px;color:var(--tv-gold);border:1px solid var(--tv-gold);padding:2px 8px;border-radius:4px;font-weight:900;background:rgba(255,215,0,.1)}
+.badge{width:60px;height:60px;object-fit:contain}
+.badge[src=""]{display:none}
+.team{flex:1;text-align:center}
+.name{font-size:12px;font-weight:bold;text-transform:uppercase;height:30px;display:flex;align-items:center;justify-content:center}
+.mid{padding:0 8px;min-width:60px}
+.vs{opacity:.3;font-weight:900}
+.score{font-size:24px;font-weight:900}
+.score.live{color:var(--live)}
+.league-footer{font-size:10px;margin-top:15px;color:#666;border-top:1px solid rgba(255,255,255,.1);padding-top:10px}
+.loading{text-align:center;padding:60px 20px;color:#666;font-size:16px}
+</style>
+</head>
+<body>
+<div class="header-nav">
+  <div class="nav-row" id="dateNav"><a onclick="currentDateFilter=null;currentLeagueFilter='all';document.querySelectorAll('.nav-item').forEach(function(b){b.classList.remove('active-filter')});this.classList.add('active-filter');applyFilters()" class="nav-item active-filter">ALL MATCHES</a></div>
+  <div class="nav-row" id="leagueNav" style="padding-top:0"></div>
+</div>
+<div class="container" id="container">
+  <div class="loading">No matches found.</div>
+</div>
+<script>
+(function(){
+  var LANG=${JSON.stringify(lang)};
+  var events=${JSON.stringify(events)};
+  var now=new Date();var todayStr=now.toLocaleDateString('en-CA',{timeZone:${JSON.stringify(tz)}});
+  var activeLeagues={};
+  events.forEach(function(e){activeLeagues[e.leagueId]=e.league});
+  render();
+
+  function render(){
+    var eventDates=new Set();events.forEach(function(e){eventDates.add(e.dateEvent)});
+    var dateNav=document.getElementById('dateNav');
+    var sortedDates=Array.from(eventDates).sort();
+    sortedDates.forEach(function(ds){
+      var a=document.createElement('a');a.className='nav-item';a.setAttribute('data-datefilter',ds);
+      a.textContent=ds===todayStr?'TODAY':new Date(ds+'T12:00:00').toLocaleDateString(LANG,{weekday:'short',day:'numeric'}).toUpperCase();
+      a.onclick=function(){filterDate(this.getAttribute('data-datefilter'),this)};
+      dateNav.appendChild(a);
+    });
+    var leagueNav=document.getElementById('leagueNav');
+    Object.keys(activeLeagues).forEach(function(id){
+      var a=document.createElement('a');a.className='nav-item league-item';
+      a.textContent=activeLeagues[id];
+      a.onclick=function(){filterLeague(id,this)};
+      leagueNav.appendChild(a);
+    });
+    var container=document.getElementById('container');container.innerHTML='';
+    if(!events.length){container.innerHTML='<div class="loading">No matches found.</div>';return}
+    var lastDate='',grid;
+    for(var i=0;i<events.length;i++){
+      var e=events[i];
+      if(e.dateEvent!==lastDate){
+        lastDate=e.dateEvent;
+        var h=document.createElement('div');h.id='date-'+e.dateEvent;h.className='day-header date-group';
+        h.textContent=new Date(e.dateEvent+'T12:00:00').toLocaleDateString(LANG,{weekday:'long',day:'numeric',month:'long'});
+        container.appendChild(h);
+        grid=document.createElement('div');grid.className='grid';container.appendChild(grid);
+      }
+      var card=document.createElement('div');card.className='card match-card';card.setAttribute('data-league',e.leagueId);card.setAttribute('data-date',e.dateEvent);
+      var mid=e.score?('<div class="score'+(e.live?' live':'')+'">'+esc(e.score)+'</div>'):'<div class="vs">VS</div>';
+      card.innerHTML='<div class="time-box"><span class="time'+(e.live?' live':'')+'">'+esc(e.statusLabel)+'</span>'+(e.tv?'<span class="tv-station">\\ud83d\\udcfa '+esc(e.tv)+'</span>':'')+'</div><div style="display:flex;justify-content:space-around;align-items:center"><div class="team"><img class="badge" src="'+e.homeBadge+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.home)+'</div></div><div class="mid">'+mid+'</div><div class="team"><img class="badge" src="'+e.awayBadge+'" onerror="this.style.display=\\'none\\'"><div class="name">'+esc(e.away)+'</div></div></div><div class="league-footer">'+esc(e.league)+'</div>';
+      grid.appendChild(card);
+    }
+  }
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+})();
+
+var currentDateFilter=null,currentLeagueFilter='all';
+function applyFilters(){
+  document.querySelectorAll('.match-card').forEach(function(c){
+    var matchDate=currentDateFilter===null||c.getAttribute('data-date')===currentDateFilter;
+    var matchLeague=currentLeagueFilter==='all'||c.getAttribute('data-league')===currentLeagueFilter;
+    c.classList.toggle('hidden-match',!(matchDate&&matchLeague));
+  });
+  document.querySelectorAll('.date-group').forEach(function(h){
+    var g=h.nextElementSibling;if(!g)return;
+    var v=g.querySelectorAll('.match-card:not(.hidden-match)').length>0;
+    h.style.display=v?'':'none';g.style.display=v?'grid':'none';
+  });
+}
+function filterDate(date,el){
+  document.querySelectorAll('#dateNav .nav-item').forEach(function(b){b.classList.remove('active-filter')});
+  el.classList.add('active-filter');currentDateFilter=date;applyFilters();
+  var target=document.getElementById('date-'+date);if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function filterLeague(id,el){
+  document.querySelectorAll('#leagueNav .nav-item').forEach(function(b){b.classList.remove('active-filter')});
+  el.classList.add('active-filter');currentLeagueFilter=id;applyFilters();
+}
+</script>
+</body>
+</html>`);
+        return;
+      }
+
       if (widgetSource === 'thesportsdb') {
         const apiKey = settings?.widgetApiKey || '123';
         const tvMapJson = settings?.widgetTvMap || '{}';
