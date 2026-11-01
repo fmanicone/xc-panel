@@ -60,6 +60,7 @@ const monitoringItems = [
 const systemItems = [
   { title: "Remote Update", url: "/update", icon: RefreshCw },
   { title: "Parental PIN", url: "/parental", icon: Lock },
+  { title: "Activations", url: "/activations", icon: Key },
   { title: "Login Attempts", url: "/login-attempts", icon: Activity },
   { title: "Change Password", url: "/change-password", icon: Key },
 ];

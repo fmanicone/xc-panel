@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import { registerActivationRoutes } from "./activations";
 import type { Server } from "http";
 import express from "express";
 import session from "express-session";
@@ -195,6 +196,13 @@ export async function registerRoutes(
     } else {
       res.json({ authenticated: false });
     }
+  });
+
+  // Servizio di attivazione (login_type "mac" / "activation")
+  registerActivationRoutes(app, requireAuth, (i) => {
+    const st: any = storage.getSettings();
+    const url = [st?.portal1Url, st?.portal2Url, st?.portal3Url, st?.portal4Url, st?.portal5Url][i];
+    return url && url !== "0" ? url : null;
   });
 
   app.get("/api/admin/login-attempts", requireAuth, (req, res) => {
@@ -726,7 +734,7 @@ export async function registerRoutes(
           apkurl: settings.apkUrl || "",
           backupurl: `${baseUrl}/api/`,
           logurl: `${baseUrl}/api/`,
-          activation_url: "",
+          activation_url: `${baseUrl}/api/activate`,
           socket_url: socketUrl,  // HTTP URL for Socket.IO
           mqtt_url: mqttUrl,      // TCP URL for MQTT
           epg_url: settings.epgUrl || "no",

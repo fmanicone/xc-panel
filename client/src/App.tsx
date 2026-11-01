@@ -20,6 +20,7 @@ import MessagesPage from "@/pages/messages";
 import GlobalMessagePage from "@/pages/global-message";
 import SportsGuide from "@/pages/sports-guide";
 import ConnectedUsersPage from "@/pages/connected-users";
+import ActivationsPage from "@/pages/activations";
 import MaintenancePage from "@/pages/maintenance";
 import ParentalResetPage from "@/pages/parental-reset";
 import RemoteUpdatePage from "@/pages/remote-update";
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/global-message" component={GlobalMessagePage} />
       <Route path="/sports" component={SportsGuide} />
       <Route path="/users" component={ConnectedUsersPage} />
+      <Route path="/activations" component={ActivationsPage} />
       <Route path="/maintenance" component={MaintenancePage} />
       <Route path="/parental" component={ParentalResetPage} />
       <Route path="/update" component={RemoteUpdatePage} />
