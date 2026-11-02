@@ -38,6 +38,16 @@ activationsDb.exec(`
   );
 `);
 
+// Livelli di accesso per utente della linea: "full" (default, tutto) o "maintenance" (solo stato linea).
+activationsDb.exec(`
+  CREATE TABLE IF NOT EXISTS access_levels (
+    username TEXT PRIMARY KEY COLLATE NOCASE,
+    level TEXT NOT NULL CHECK (level IN ('full','maintenance')),
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 const MAX_PENDING = 500;
 
 /** AA:BB:CC:DD:EE:FF in maiuscolo; accetta anche senza separatori o con trattini. Null se non valido. */
@@ -147,6 +157,33 @@ export function registerActivationRoutes(
   };
   app.post("/api/activate", activate);
   app.get("/api/activate", activate);
+
+  // L'app chiede il livello dell'utente appena entrato. Risponde solo il livello, nessun altro dato.
+  app.get("/api/access", (req, res) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+    if (rateLimited(ip)) return res.status(429).json({ level: "full" });
+    const u = String(req.query.username || "").trim();
+    const row = u ? (activationsDb.prepare("SELECT level FROM access_levels WHERE username = ?").get(u) as { level: string } | undefined) : undefined;
+    res.json({ level: row?.level ?? "full" });
+  });
+
+  app.get("/api/admin/access", requireAuth, (_req, res) => {
+    res.json({ items: activationsDb.prepare("SELECT username, level, note, created_at AS createdAt FROM access_levels ORDER BY username").all() });
+  });
+
+  app.put("/api/admin/access", requireAuth, (req, res) => {
+    const username = String(req.body?.username || "").trim();
+    const level = req.body?.level === "maintenance" ? "maintenance" : req.body?.level === "full" ? "full" : null;
+    if (!username || !level) return res.status(400).json({ message: "Servono utente e livello (full o maintenance)" });
+    activationsDb.prepare("INSERT INTO access_levels (username, level, note) VALUES (?, ?, ?) ON CONFLICT(username) DO UPDATE SET level = excluded.level, note = excluded.note")
+      .run(username, level, String(req.body?.note || ""));
+    res.json({ success: true });
+  });
+
+  app.delete("/api/admin/access/:username", requireAuth, (req, res) => {
+    activationsDb.prepare("DELETE FROM access_levels WHERE username = ?").run(req.params.username);
+    res.json({ success: true });
+  });
 
   app.get("/api/admin/activations", requireAuth, (_req, res) => {
     const rows = activationsDb.prepare("SELECT * FROM activations ORDER BY (status = 'pending') DESC, COALESCE(last_seen, created_at) DESC").all() as Row[];

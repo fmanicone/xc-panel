@@ -48,6 +48,62 @@ const statusBadge = (s: Activation["status"]) =>
   : s === "pending" ? <Badge className="bg-amber-500">In attesa</Badge>
   : <Badge variant="destructive">Bloccata</Badge>;
 
+type AccessItem = { username: string; level: "full" | "maintenance"; note: string };
+
+/** Livelli di accesso: "maintenance" = l'app mostra solo lo stato della linea. */
+function AccessLevels() {
+  const { toast } = useToast();
+  const [user, setUser] = useState("");
+  const [note, setNote] = useState("");
+  const { data } = useQuery<{ items: AccessItem[] }>({ queryKey: ["/api/admin/access"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/admin/access"] });
+  const add = useMutation({
+    mutationFn: async () => apiRequest("PUT", "/api/admin/access", { username: user.trim(), level: "maintenance", note }),
+    onSuccess: () => { setUser(""); setNote(""); refresh(); toast({ title: "Manutentore aggiunto" }); },
+    onError: (e: any) => toast({ title: "Errore", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const remove = useMutation({
+    mutationFn: async (u: string) => apiRequest("DELETE", `/api/admin/access/${encodeURIComponent(u)}`),
+    onSuccess: () => { refresh(); toast({ title: "Tornato accesso completo" }); },
+  });
+  const items = data?.items ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Livelli di accesso</CardTitle>
+        <CardDescription>
+          Gli utenti elencati qui sono "Manutentori": nell'app vedono solo lo stato della linea (test di velocità e dati connessione), senza canali, film e serie.
+          Chi non e' in elenco ha l'accesso completo. Si applica all'utente della linea Xtream usato per entrare.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2 flex-wrap items-end">
+          <div><Label>Utente linea</Label><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="utente" /></div>
+          <div><Label>Nota</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="es. Tecnico ADSL zona nord" /></div>
+          <Button disabled={!user.trim() || add.isPending} onClick={() => add.mutate()}><Plus className="h-4 w-4 mr-2" />Aggiungi manutentore</Button>
+        </div>
+        {items.length === 0 ? <p className="text-muted-foreground text-sm">Nessun manutentore.</p> : (
+          <Table>
+            <TableHeader><TableRow><TableHead>Utente</TableHead><TableHead>Livello</TableHead><TableHead>Nota</TableHead><TableHead className="text-right">Azioni</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {items.map((i) => (
+                <TableRow key={i.username}>
+                  <TableCell className="font-mono">{i.username}</TableCell>
+                  <TableCell><Badge variant={i.level === "maintenance" ? "default" : "secondary"}>{i.level === "maintenance" ? "Manutentore" : "Completo"}</Badge></TableCell>
+                  <TableCell className="text-sm">{i.note || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="icon" variant="ghost" title="Rimuovi (torna accesso completo)" onClick={() => remove.mutate(i.username)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ActivationsPage() {
   const { toast } = useToast();
   const [form, setForm] = useState<Form | null>(null);
@@ -152,6 +208,8 @@ export default function ActivationsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AccessLevels />
 
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
         <DialogContent>
