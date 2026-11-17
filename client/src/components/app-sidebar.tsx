@@ -41,6 +41,7 @@ const configItems = [
   { title: "Interface & Theme", url: "/interface", icon: Palette },
   { title: "Player & Language", url: "/player", icon: Play },
   { title: "VPN Servers", url: "/vpn", icon: Shield },
+  { title: "WireGuard (Vega)", url: "/wireguard", icon: Shield },
   { title: "Intro Video", url: "/intro", icon: Video },
   { title: "Backdrop", url: "/backdrop", icon: Image },
   { title: "Sports Guide", url: "/sports", icon: Tv },

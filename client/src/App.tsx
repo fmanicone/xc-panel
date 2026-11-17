@@ -14,6 +14,7 @@ import Dashboard from "@/pages/dashboard";
 import GeneralSettings from "@/pages/general-settings";
 import InterfaceSettings from "@/pages/interface-settings";
 import VpnSettings from "@/pages/vpn-settings";
+import WireguardSettings from "@/pages/wireguard-settings";
 import PlayerSettings from "@/pages/player-settings";
 import AnnouncementPage from "@/pages/announcement";
 import MessagesPage from "@/pages/messages";
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/settings" component={GeneralSettings} />
       <Route path="/interface" component={InterfaceSettings} />
       <Route path="/vpn" component={VpnSettings} />
+      <Route path="/wireguard" component={WireguardSettings} />
       <Route path="/player" component={PlayerSettings} />
       <Route path="/announcement" component={AnnouncementPage} />
       <Route path="/messages" component={MessagesPage} />
@@ -62,6 +64,7 @@ const pageTitles: Record<string, string> = {
   "/settings": "General Settings",
   "/interface": "Interface & Theme",
   "/vpn": "VPN Servers",
+  "/wireguard": "WireGuard (Vega)",
   "/player": "Player & Language",
   "/announcement": "Announcements",
   "/messages": "User Messages",

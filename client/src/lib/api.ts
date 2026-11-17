@@ -132,3 +132,34 @@ export async function deleteConnectedUser(id: number): Promise<void> {
 export async function getAccessLogs(): Promise<any[]> {
   return fetchApi(api.logs.list.path);
 }
+
+// WireGuard (app Vega)
+export interface WgLocation {
+  id: number;
+  country: string;
+  state: string;
+  host: string;
+  status: string;
+  createdAt: string | null;
+}
+
+export async function getWgLocations(): Promise<WgLocation[]> {
+  return fetchApi("/api/admin/wg-locations");
+}
+
+export async function uploadWgConfs(files: File[]): Promise<{ results: { name: string; ok: boolean; error?: string; id?: number }[] }> {
+  const form = new FormData();
+  files.forEach((f) => form.append("files", f));
+  // Niente Content-Type JSON: lo imposta il browser col boundary del multipart.
+  const res = await fetch(BASE_URL + "/api/admin/wg-locations/upload", { method: "POST", body: form });
+  if (!res.ok) throw new Error(`API Error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateWgLocation(id: number, data: Partial<Pick<WgLocation, "country" | "state" | "status">>): Promise<WgLocation> {
+  return fetchApi(`/api/admin/wg-locations/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteWgLocation(id: number): Promise<void> {
+  return fetchApi(`/api/admin/wg-locations/${id}`, { method: "DELETE" });
+}
