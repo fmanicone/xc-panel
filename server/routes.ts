@@ -12,6 +12,7 @@ import { api } from "@shared/routes";
 import { defaultInterfaceToggles } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
+import { registerWireguardRoutes, wgApiResponse } from "./wireguard";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -197,6 +198,9 @@ export async function registerRoutes(
       res.json({ authenticated: false });
     }
   });
+
+  // VPN WireGuard per le app Vega (posizioni con i .conf del fornitore)
+  registerWireguardRoutes(app, requireAuth);
 
   // Servizio di attivazione (login_type "mac" / "activation")
   registerActivationRoutes(app, requireAuth, (i) => {
@@ -895,6 +899,11 @@ export async function registerRoutes(
             mnt_expire: (settings as any).maintenanceExpire || "2025-12-31 23:59:00",
           },
         });
+      }
+
+      // WireGuard (app Vega): elenco posizioni e .conf della posizione scelta
+      if (tag === "wg" || tag === "wgconf") {
+        return res.json(wgApiResponse(tag, req.query as Record<string, unknown>));
       }
 
       if (tag === "ovpn") {
