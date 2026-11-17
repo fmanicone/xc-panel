@@ -6,8 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { countryOptions } from "@shared/schema";
-import { deleteWgLocation, getWgLocations, updateWgLocation, uploadWgConfs, type WgLocation } from "@/lib/api";
-import { Check, Pencil, Trash2, Upload, X } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  deleteWgLocation, getWgLocations, getWgSettings, importSurfshark, saveWgSettings, updateWgLocation, uploadWgConfs,
+  type WgLocation, type WgSettings,
+} from "@/lib/api";
+import { Check, Download, KeyRound, Pencil, Trash2, Upload, X } from "lucide-react";
 
 function countryLabel(code: string) {
   return countryOptions.find((c) => c.value === code)?.label || code;
@@ -25,12 +29,17 @@ export default function WireguardSettings() {
   const [editId, setEditId] = useState<number | null>(null);
   const [edit, setEdit] = useState({ country: "", state: "" });
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ws, setWs] = useState<WgSettings | null>(null);
+  const [keyForm, setKeyForm] = useState({ privateKey: "", address: "", dns: "" });
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      setRows(await getWgLocations());
+      const [list, st] = await Promise.all([getWgLocations(), getWgSettings()]);
+      setRows(list);
+      setWs(st);
+      setKeyForm((f) => ({ privateKey: "", address: f.address || st.address, dns: f.dns || st.dns }));
     } catch {
       toast({ title: "Errore", description: "Impossibile leggere le posizioni WireGuard", variant: "destructive" });
     } finally {
@@ -56,6 +65,33 @@ export default function WireguardSettings() {
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function saveKey() {
+    setBusy(true);
+    try {
+      const st = await saveWgSettings(keyForm);
+      setWs(st);
+      setKeyForm({ ...keyForm, privateKey: "" });
+      toast({ title: "Chiave salvata" });
+    } catch {
+      toast({ title: "Errore", description: "Chiave privata non valida (44 caratteri base64, finisce con =)", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runImport() {
+    setBusy(true);
+    try {
+      const r = await importSurfshark();
+      toast({ title: "Posizioni Surfshark", description: `${r.added} nuove, ${r.updated} aggiornate (elenco: ${r.total})` });
+      await load();
+    } catch {
+      toast({ title: "Errore", description: "Importazione da Surfshark non riuscita", variant: "destructive" });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -107,10 +143,43 @@ export default function WireguardSettings() {
           onChange={(e) => onFiles(e.target.files)}
           data-testid="input-wg-files"
         />
-        <Button className="mt-4" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="button-wg-upload">
-          <Upload className="w-4 h-4 mr-2" /> {busy ? "Caricamento..." : "Carica file .conf"}
-        </Button>
+        <div className="mt-4 flex justify-center gap-3">
+          <Button disabled={busy} onClick={runImport} data-testid="button-wg-import">
+            <Download className="w-4 h-4 mr-2" /> Importa tutte le posizioni Surfshark
+          </Button>
+          <Button variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="button-wg-upload">
+            <Upload className="w-4 h-4 mr-2" /> {busy ? "Caricamento..." : "Carica file .conf"}
+          </Button>
+        </div>
       </div>
+
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5" /> Chiave WireGuard (posizioni importate)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Surfshark: Manual setup &gt; WireGuard &gt; genera una coppia di chiavi e incolla qui la chiave privata.
+            Le posizioni importate usano tutte questa chiave. {ws?.hasKey ? `Chiave attuale: ${ws.keyHint}` : "Nessuna chiave impostata."}
+          </p>
+          <div>
+            <Label>Chiave privata</Label>
+            <Input type="password" autoComplete="off" value={keyForm.privateKey} placeholder={ws?.hasKey ? "(lascia vuoto per non cambiarla)" : "xxxxxxxx...="}
+              onChange={(e) => setKeyForm({ ...keyForm, privateKey: e.target.value })} data-testid="input-wg-key" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Address</Label>
+              <Input value={keyForm.address} onChange={(e) => setKeyForm({ ...keyForm, address: e.target.value })} />
+            </div>
+            <div>
+              <Label>DNS</Label>
+              <Input value={keyForm.dns} onChange={(e) => setKeyForm({ ...keyForm, dns: e.target.value })} />
+            </div>
+          </div>
+          <Button className="w-full" disabled={busy} onClick={saveKey} data-testid="button-wg-save-key">Salva</Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Posizioni ({rows.length})</CardTitle></CardHeader>
@@ -121,6 +190,7 @@ export default function WireguardSettings() {
                 <TableHead>Paese</TableHead>
                 <TableHead>Citta'</TableHead>
                 <TableHead>Server</TableHead>
+                <TableHead>Origine</TableHead>
                 <TableHead>Stato</TableHead>
                 <TableHead>Modifica</TableHead>
                 <TableHead>Elimina</TableHead>
@@ -129,7 +199,7 @@ export default function WireguardSettings() {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nessuna posizione caricata</TableCell>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nessuna posizione caricata</TableCell>
                 </TableRow>
               ) : rows.map((r) => (
                 <TableRow key={r.id}>
@@ -149,6 +219,7 @@ export default function WireguardSettings() {
                       : r.state}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{r.host}</TableCell>
+                  <TableCell className="text-xs">{r.source === "surfshark" ? "Surfshark" : ".conf"}</TableCell>
                   <TableCell>
                     <Button size="sm" variant={r.status === "ACTIVE" ? "default" : "secondary"} onClick={() => toggle(r)}>
                       {r.status}

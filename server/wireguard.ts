@@ -5,11 +5,15 @@ import { vpnDb } from "./sqlite";
 /**
  * VPN WireGuard per le app Vega (Fire TV con Vega OS: la VPN di sistema accetta solo WireGuard, non OpenVPN).
  *
- * Una riga per posizione, con il file .conf scaricato dal fornitore (es. Surfshark: Manual setup > WireGuard >
- * Locations). Versione di prova: ogni posizione ha il suo .conf con la stessa chiave privata, quindi funziona
- * bene con un dispositivo alla volta (WireGuard riconosce i dispositivi dalla chiave).
+ * Due modi di avere le posizioni:
+ *  - importazione dall'elenco pubblico Surfshark (server + chiave pubblica di ogni posizione) e una sola chiave
+ *    privata del cliente salvata qui (Surfshark: Manual setup > WireGuard > genera la coppia di chiavi): il .conf
+ *    si compone al volo;
+ *  - caricamento dei file .conf gia' pronti (uno per posizione).
+ * Versione di prova: con una sola chiave privata funziona bene un dispositivo alla volta (WireGuard riconosce i
+ * dispositivi dalla chiave).
  *
- * App:  ApiIPTV.php?tag=wg                -> elenco posizioni attive (senza chiavi)
+ * App:  ApiIPTV.php?tag=wg                -> elenco posizioni utilizzabili (senza chiavi)
  *       ApiIPTV.php?tag=wgconf&id=<id>    -> testo del .conf della posizione
  */
 
@@ -23,7 +27,23 @@ vpnDb.exec(`
     status TEXT DEFAULT 'ACTIVE',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS wg_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    private_key TEXT DEFAULT '',
+    address TEXT DEFAULT '10.14.0.2/16',
+    dns TEXT DEFAULT '162.252.172.57, 149.154.159.92',
+    port INTEGER DEFAULT 51820
+  );
+  INSERT OR IGNORE INTO wg_settings (id) VALUES (1);
 `);
+// Colonne aggiunte dopo la prima versione (tabella gia' creata in produzione).
+for (const [col, def] of [["server_pubkey", "TEXT DEFAULT ''"], ["source", "TEXT DEFAULT 'conf'"]] as const) {
+  const cols = vpnDb.prepare("PRAGMA table_info(wg_locations)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === col)) vpnDb.exec(`ALTER TABLE wg_locations ADD COLUMN ${col} ${def}`);
+}
+
+const SURFSHARK_LIST = "https://api.surfshark.com/v4/server/clusters/generic";
+const KEY_RE = /^[A-Za-z0-9+/]{43}=$/;
 
 export interface WgLocation {
   id: number;
@@ -31,7 +51,15 @@ export interface WgLocation {
   state: string;
   host: string;
   status: string;
+  source: string;
   createdAt: string | null;
+}
+
+interface WgSettings {
+  privateKey: string;
+  address: string;
+  dns: string;
+  port: number;
 }
 
 function rowToLocation(row: any): WgLocation {
@@ -41,8 +69,14 @@ function rowToLocation(row: any): WgLocation {
     state: row.state || "",
     host: row.host || "",
     status: row.status || "ACTIVE",
+    source: row.source || "conf",
     createdAt: row.created_at || null,
   };
+}
+
+function settings(): WgSettings {
+  const r = vpnDb.prepare("SELECT * FROM wg_settings WHERE id = 1").get() as any;
+  return { privateKey: r?.private_key || "", address: r?.address || "10.14.0.2/16", dns: r?.dns || "", port: Number(r?.port) || 51820 };
 }
 
 /** Controlla che sia un .conf WireGuard completo e ne ricava il server (Endpoint). */
@@ -66,20 +100,42 @@ export function guessLocation(host: string): { country: string; state: string } 
   return { country: country || "XX", state };
 }
 
+/** .conf completo per una posizione importata: chiave del cliente + server della posizione. */
+function composeConf(host: string, serverPubKey: string, s: WgSettings): string {
+  const lines = ["[Interface]", `PrivateKey = ${s.privateKey}`, `Address = ${s.address}`];
+  if (s.dns.trim()) lines.push(`DNS = ${s.dns}`);
+  lines.push("", "[Peer]", `PublicKey = ${serverPubKey}`, "AllowedIPs = 0.0.0.0/0", `Endpoint = ${host}:${s.port}`, "");
+  return lines.join("\n");
+}
+
 export const wgStorage = {
   list(): WgLocation[] {
-    return vpnDb.prepare("SELECT id, country, state, host, status, created_at FROM wg_locations ORDER BY country, state").all().map(rowToLocation);
+    return vpnDb
+      .prepare("SELECT id, country, state, host, status, source, created_at FROM wg_locations ORDER BY country, state")
+      .all()
+      .map(rowToLocation);
   },
-  active(): WgLocation[] {
-    return this.list().filter((l) => l.status === "ACTIVE");
+  /** Posizioni attive e utilizzabili: .conf caricato, oppure importata e chiave privata impostata. */
+  usable(): WgLocation[] {
+    const hasKey = !!settings().privateKey;
+    return vpnDb
+      .prepare(
+        "SELECT id, country, state, host, status, source, created_at FROM wg_locations WHERE status = 'ACTIVE' AND (config != '' OR (? AND server_pubkey != '')) ORDER BY country, state",
+      )
+      .all(hasKey ? 1 : 0)
+      .map(rowToLocation);
   },
   config(id: number): string | null {
-    const row = vpnDb.prepare("SELECT config FROM wg_locations WHERE id = ? AND status = 'ACTIVE'").get(id) as any;
-    return row ? String(row.config) : null;
+    const row = vpnDb.prepare("SELECT host, config, server_pubkey FROM wg_locations WHERE id = ? AND status = 'ACTIVE'").get(id) as any;
+    if (!row) return null;
+    if (row.config) return String(row.config);
+    const s = settings();
+    if (!s.privateKey || !row.server_pubkey) return null;
+    return composeConf(row.host, row.server_pubkey, s);
   },
   create(data: { country: string; state: string; host: string; config: string }): WgLocation {
     const r = vpnDb
-      .prepare("INSERT INTO wg_locations (country, state, host, config, status) VALUES (?, ?, ?, ?, 'ACTIVE')")
+      .prepare("INSERT INTO wg_locations (country, state, host, config, status, source) VALUES (?, ?, ?, ?, 'ACTIVE', 'conf')")
       .run(data.country, data.state, data.host, data.config);
     return rowToLocation(vpnDb.prepare("SELECT * FROM wg_locations WHERE id = ?").get(r.lastInsertRowid));
   },
@@ -96,6 +152,51 @@ export const wgStorage = {
   remove(id: number): void {
     vpnDb.prepare("DELETE FROM wg_locations WHERE id = ?").run(id);
   },
+  /** Elenco pubblico Surfshark (server + chiave pubblica): aggiunge le posizioni nuove e aggiorna le chiavi. */
+  async importSurfshark(): Promise<{ added: number; updated: number; total: number }> {
+    const res = await fetch(SURFSHARK_LIST, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`Surfshark: HTTP ${res.status}`);
+    const list = (await res.json()) as any[];
+    if (!Array.isArray(list)) throw new Error("Surfshark: risposta non valida");
+    const find = vpnDb.prepare("SELECT id FROM wg_locations WHERE host = ?");
+    const ins = vpnDb.prepare(
+      "INSERT INTO wg_locations (country, state, host, config, status, source, server_pubkey) VALUES (?, ?, ?, '', 'ACTIVE', 'surfshark', ?)",
+    );
+    const upd = vpnDb.prepare("UPDATE wg_locations SET server_pubkey = ? WHERE id = ? AND source = 'surfshark'");
+    let added = 0, updated = 0;
+    const tx = vpnDb.transaction(() => {
+      for (const s of list) {
+        const host = String(s?.connectionName || "");
+        const key = String(s?.pubKey || "");
+        if (!host || !KEY_RE.test(key)) continue;
+        const cc = String(s?.countryCode || guessLocation(host).country).toUpperCase();
+        const city = String(s?.location || guessLocation(host).state);
+        const ex = find.get(host) as any;
+        if (ex) { upd.run(key, ex.id); updated++; } else { ins.run(cc, city, host, key); added++; }
+      }
+    });
+    tx();
+    return { added, updated, total: list.length };
+  },
+  settingsPublic() {
+    const s = settings();
+    const k = s.privateKey;
+    return { hasKey: !!k, keyHint: k ? `${k.slice(0, 4)}…${k.slice(-4)}` : "", address: s.address, dns: s.dns, port: s.port };
+  },
+  saveSettings(data: { privateKey?: string; address?: string; dns?: string; port?: number }) {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (data.privateKey !== undefined && data.privateKey !== "") {
+      const k = String(data.privateKey).trim();
+      if (!KEY_RE.test(k)) throw Object.assign(new Error("Chiave privata non valida (44 caratteri base64)"), { status: 400 });
+      sets.push("private_key = ?"); vals.push(k);
+    }
+    if (data.address !== undefined) { sets.push("address = ?"); vals.push(String(data.address).trim()); }
+    if (data.dns !== undefined) { sets.push("dns = ?"); vals.push(String(data.dns).trim()); }
+    if (data.port !== undefined && Number(data.port) > 0) { sets.push("port = ?"); vals.push(Number(data.port)); }
+    if (sets.length) vpnDb.prepare(`UPDATE wg_settings SET ${sets.join(", ")} WHERE id = 1`).run(...vals);
+    return this.settingsPublic();
+  },
 };
 
 /** Risposte di ApiIPTV.php per le app (null = tag non WireGuard). */
@@ -105,19 +206,19 @@ export function wgApiResponse(tag: string, query: Record<string, unknown>): obje
       tag: "wg",
       success: "1",
       api_ver: "1.0v",
-      wg: wgStorage.active().map((l) => ({ id: String(l.id), country: l.country, state: l.state, status: l.status })),
+      wg: wgStorage.usable().map((l) => ({ id: String(l.id), country: l.country, state: l.state, status: l.status })),
     };
   }
   if (tag === "wgconf") {
     const id = Number(query.id);
     const conf = Number.isFinite(id) ? wgStorage.config(id) : null;
-    if (!conf) return { tag: "wgconf", success: "0", api_ver: "1.0v", message: "Posizione non trovata" };
+    if (!conf) return { tag: "wgconf", success: "0", api_ver: "1.0v", message: "Posizione non disponibile" };
     return { tag: "wgconf", success: "1", api_ver: "1.0v", id: String(id), conf };
   }
   return null;
 }
 
-/** API di amministrazione (solo con login: i .conf contengono la chiave privata). */
+/** API di amministrazione (solo con login: chiave privata e .conf sono segreti). */
 export function registerWireguardRoutes(app: Express, requireAuth: RequestHandler) {
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024, files: 300 } });
 
@@ -145,6 +246,27 @@ export function registerWireguardRoutes(app: Express, requireAuth: RequestHandle
       res.json({ results });
     } catch {
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Tutte le posizioni dall'elenco pubblico Surfshark (nessun account richiesto).
+  app.post("/api/admin/wg-locations/import-surfshark", requireAuth, async (_req, res) => {
+    try {
+      res.json(await wgStorage.importSurfshark());
+    } catch (e: any) {
+      res.status(502).json({ message: String(e?.message || e) });
+    }
+  });
+
+  app.get("/api/admin/wg-settings", requireAuth, (_req, res) => {
+    res.json(wgStorage.settingsPublic());
+  });
+
+  app.put("/api/admin/wg-settings", requireAuth, (req, res) => {
+    try {
+      res.json(wgStorage.saveSettings(req.body ?? {}));
+    } catch (e: any) {
+      res.status(e?.status || 500).json({ message: String(e?.message || e) });
     }
   });
 

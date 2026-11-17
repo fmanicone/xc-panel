@@ -140,7 +140,28 @@ export interface WgLocation {
   state: string;
   host: string;
   status: string;
+  source: string;
   createdAt: string | null;
+}
+
+export interface WgSettings {
+  hasKey: boolean;
+  keyHint: string;
+  address: string;
+  dns: string;
+  port: number;
+}
+
+export async function getWgSettings(): Promise<WgSettings> {
+  return fetchApi("/api/admin/wg-settings");
+}
+
+export async function saveWgSettings(data: { privateKey?: string; address?: string; dns?: string }): Promise<WgSettings> {
+  return fetchApi("/api/admin/wg-settings", { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function importSurfshark(): Promise<{ added: number; updated: number; total: number }> {
+  return fetchApi("/api/admin/wg-locations/import-surfshark", { method: "POST" });
 }
 
 export async function getWgLocations(): Promise<WgLocation[]> {
