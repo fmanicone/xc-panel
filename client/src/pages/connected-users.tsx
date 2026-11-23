@@ -26,7 +26,10 @@ import {
   Lock,
   HardDrive,
   Info,
-  MessageSquare
+  MessageSquare,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -95,6 +98,19 @@ const REMOTE_COMMANDS: RemoteCommand[] = [
   },
 ];
 
+type SortKey = "user" | "ip" | "online" | "connection" | "lastActive" | "version" | "packageName" | "appName";
+
+/** Version strings compared number by number ("7.0-3021" > "7.0-3008", "1.10" > "1.9"). */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const pb = b.split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? -1) - (pb[i] ?? -1);
+    if (d) return d;
+  }
+  return a.localeCompare(b);
+}
+
 export default function ConnectedUsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<ConnectedUser[]>([]);
@@ -105,6 +121,7 @@ export default function ConnectedUsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [sendingCommand, setSendingCommand] = useState(false);
   const [messageText, setMessageText] = useState("");
@@ -135,8 +152,53 @@ export default function ConnectedUsersPage() {
       result = result.filter((u) => (u as any).status === statusFilter);
     }
 
+    if (sort) {
+      const val = (u: any): string | number => {
+        const name = u.username || u.userId || "";
+        switch (sort.key) {
+          case "user": return name.toLowerCase();
+          case "ip": return u.ipAddress || "";
+          case "online": return u.status === "ACTIVE" ? 1 : 0;
+          case "connection": return realtimeDevices.get(name)?.protocol || "";
+          case "lastActive": return u.lastActive ? new Date(u.lastActive).getTime() : 0;
+          case "version": return String(u.version || u.ver || "");
+          case "packageName": return (u.packageName || "").toLowerCase();
+          case "appName": return (u.appName || "").toLowerCase();
+        }
+      };
+      result = [...result].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        // Empty values always at the bottom.
+        if (va === "" && vb !== "") return 1;
+        if (vb === "" && va !== "") return -1;
+        let d: number;
+        if (sort.key === "version") d = compareVersions(String(va), String(vb));
+        else if (typeof va === "number" && typeof vb === "number") d = va - vb;
+        else d = String(va).localeCompare(String(vb));
+        return d * sort.dir;
+      });
+    }
+
     return result;
-  }, [users, searchQuery, statusFilter]);
+  }, [users, searchQuery, statusFilter, sort, realtimeDevices]);
+
+  function toggleSort(key: SortKey) {
+    setSort((cur) => (cur?.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null));
+    setCurrentPage(1);
+  }
+
+  function SortHead({ k, children }: { k: SortKey; children: React.ReactNode }) {
+    const Icon = sort?.key !== k ? ArrowUpDown : sort.dir === 1 ? ArrowUp : ArrowDown;
+    return (
+      <TableHead>
+        <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground"
+          data-testid={`sort-${k}`}>
+          {children}
+          <Icon className={`w-3 h-3 ${sort?.key === k ? "" : "opacity-40"}`} />
+        </button>
+      </TableHead>
+    );
+  }
 
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -476,14 +538,14 @@ export default function ConnectedUsersPage() {
                       onCheckedChange={toggleAllUsers}
                     />
                   </TableHead>
-                  <TableHead>User ID</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Online</TableHead>
-                  <TableHead>Connection</TableHead>
-                  <TableHead>Last Online</TableHead>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Package Name</TableHead>
-                  <TableHead>App Name</TableHead>
+                  <SortHead k="user">User ID</SortHead>
+                  <SortHead k="ip">IP Address</SortHead>
+                  <SortHead k="online">Online</SortHead>
+                  <SortHead k="connection">Connection</SortHead>
+                  <SortHead k="lastActive">Last Online</SortHead>
+                  <SortHead k="version">Version</SortHead>
+                  <SortHead k="packageName">Package Name</SortHead>
+                  <SortHead k="appName">App Name</SortHead>
                   <TableHead className="w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
