@@ -511,6 +511,16 @@ export default function GeneralSettings() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
+                    <Label>M3U Playlist (iPhone)</Label>
+                    <p className="text-xs text-muted-foreground">Show the "M3U Playlist" sign-in and the demo playlist button</p>
+                  </div>
+                  <Switch
+                    checked={(settings as any).showM3u !== "Disabled"}
+                    onCheckedChange={(v) => setSettings({ ...settings, showM3u: v ? "Enabled" : "Disabled" } as any)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
                     <Label>Multi-Screen</Label>
                     <p className="text-xs text-muted-foreground">Show multi-screen option</p>
                   </div>

@@ -62,6 +62,7 @@ export const settings = pgTable("settings", {
   showReminders: text("show_reminders").default("Disabled"),
   showRecord: text("show_record").default("Disabled"),
   showVpn: text("show_vpn").default("Enabled"),
+  showM3u: text("show_m3u").default("Enabled"),
   showMultiscreen: text("show_multiscreen").default("Disabled"),
   showFavorites: text("show_favorites").default("Enabled"),
   showAccount: text("show_account").default("Enabled"),

@@ -13,6 +13,8 @@ import { defaultInterfaceToggles } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import { registerWireguardRoutes, wgApiResponse } from "./wireguard";
+import { registerPublicPages } from "./public-pages";
+import { registerDemoPlaylistRoutes } from "./demo-playlist";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -200,6 +202,8 @@ export async function registerRoutes(
   });
 
   // VPN WireGuard per le app Vega (posizioni con i .conf del fornitore)
+  registerPublicPages(app);
+  registerDemoPlaylistRoutes(app, requireAuth);
   registerWireguardRoutes(app, requireAuth);
 
   // Servizio di attivazione (login_type "mac" / "activation")
@@ -782,6 +786,8 @@ export async function registerRoutes(
           btn_pr: settings.showReminders === "Enabled" ? "yes" : "no",
           btn_rec: settings.showRecord === "Enabled" ? "yes" : "no",
           btn_vpn: settings.showVpn === "Enabled" ? "yes" : "no",
+          btn_m3u: settings.showM3u === "Enabled" ? "yes" : "no",
+          m3u_demo_url: `${String(req.headers["x-forwarded-proto"] || req.protocol).split(",")[0]}://${req.get("host")}/demo.m3u`,
           btn_noti: settings.showMessage === "Enabled" ? "yes" : "no",
           btn_update: settings.showUpdate === "Enabled" ? "yes" : "no",
           btn_login_settings: settings.loginSettingsButton === "Enabled" ? "yes" : "no",

@@ -41,6 +41,7 @@ export interface SqliteSettings {
   showReminders: string;
   showRecord: string;
   showVpn: string;
+  showM3u: string;
   showMultiscreen: string;
   showFavorites: string;
   showAccount: string;
@@ -245,6 +246,7 @@ function rowToSettings(row: any): SqliteSettings {
     showReminders: row.show_reminders,
     showRecord: row.show_record,
     showVpn: row.show_vpn,
+    showM3u: row.show_m3u || 'Enabled',
     showMultiscreen: row.show_multiscreen || 'Disabled',
     showFavorites: row.show_favorites || 'Enabled',
     showAccount: row.show_account || 'Enabled',
@@ -436,6 +438,7 @@ export const sqliteStorage = {
       showReminders: 'show_reminders',
       showRecord: 'show_record',
       showVpn: 'show_vpn',
+      showM3u: 'show_m3u',
       showMultiscreen: 'show_multiscreen',
       showFavorites: 'show_favorites',
       showAccount: 'show_account',
