@@ -10,11 +10,12 @@ import { vpnDb } from "./sqlite";
  *    privata del cliente salvata qui (Surfshark: Manual setup > WireGuard > genera la coppia di chiavi): il .conf
  *    si compone al volo;
  *  - caricamento dei file .conf gia' pronti (uno per posizione).
- * Versione di prova: con una sola chiave privata funziona bene un dispositivo alla volta (WireGuard riconosce i
- * dispositivi dalla chiave).
+ * WireGuard riconosce i dispositivi dalla chiave: con la stessa chiave funziona un dispositivo alla volta. Per
+ * collegare tutti insieme c'e' la scorta di chiavi (wg_keys): ogni abbonato (userid mandato dall'app) riceve una
+ * chiave sua, sempre la stessa. Gli account demo/revisione e la scorta vuota usano la chiave principale.
  *
- * App:  ApiIPTV.php?tag=wg                -> elenco posizioni utilizzabili (senza chiavi)
- *       ApiIPTV.php?tag=wgconf&id=<id>    -> testo del .conf della posizione
+ * App:  ApiIPTV.php?tag=wg                          -> elenco posizioni utilizzabili (senza chiavi)
+ *       ApiIPTV.php?tag=wgconf&id=<id>&userid=<u>   -> testo del .conf della posizione
  */
 
 vpnDb.exec(`
@@ -35,6 +36,15 @@ vpnDb.exec(`
     port INTEGER DEFAULT 51820
   );
   INSERT OR IGNORE INTO wg_settings (id) VALUES (1);
+  CREATE TABLE IF NOT EXISTS wg_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    private_key TEXT NOT NULL UNIQUE,
+    userid TEXT DEFAULT '',
+    assigned_at TEXT,
+    last_used TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS wg_keys_userid ON wg_keys (userid);
 `);
 // Colonne aggiunte dopo la prima versione (tabella gia' creata in produzione).
 for (const [col, def] of [["server_pubkey", "TEXT DEFAULT ''"], ["source", "TEXT DEFAULT 'conf'"]] as const) {
@@ -62,6 +72,47 @@ interface WgSettings {
   port: number;
 }
 
+export interface WgKey {
+  id: number;
+  keyHint: string;
+  userid: string;
+  assignedAt: string | null;
+  lastUsed: string | null;
+}
+
+/** Account che non ricevono una chiave della scorta: demo/revisione o utente non indicato. */
+const SHARED_USERS = new Set(["", "guest", "amazon", "amzon"]);
+
+function hint(k: string): string {
+  return k ? `${k.slice(0, 4)}…${k.slice(-4)}` : "";
+}
+
+/**
+ * Chiave privata per l'utente: quella gia' assegnata, altrimenti una libera della scorta, altrimenti (scorta
+ * esaurita) quella usata meno di recente. Scorta vuota o account demo -> chiave principale.
+ */
+function keyForUser(rawUser: unknown, mainKey: string): string {
+  const user = String(rawUser ?? "").trim().toLowerCase();
+  if (SHARED_USERS.has(user)) return mainKey;
+  const pick = vpnDb.transaction((): string => {
+    let row = vpnDb.prepare("SELECT id, private_key FROM wg_keys WHERE userid = ?").get(user) as any;
+    if (!row) {
+      row =
+        (vpnDb.prepare("SELECT id, private_key FROM wg_keys WHERE userid = '' ORDER BY id LIMIT 1").get() as any) ||
+        (vpnDb.prepare("SELECT id, private_key FROM wg_keys ORDER BY last_used IS NOT NULL, last_used, id LIMIT 1").get() as any);
+      if (!row) return mainKey;
+      vpnDb.prepare("UPDATE wg_keys SET userid = ?, assigned_at = datetime('now') WHERE id = ?").run(user, row.id);
+    }
+    vpnDb.prepare("UPDATE wg_keys SET last_used = datetime('now') WHERE id = ?").run(row.id);
+    return String(row.private_key);
+  });
+  return pick();
+}
+
+function poolSize(): number {
+  return (vpnDb.prepare("SELECT COUNT(*) AS n FROM wg_keys").get() as any).n as number;
+}
+
 function rowToLocation(row: any): WgLocation {
   return {
     id: row.id,
@@ -81,13 +132,13 @@ function settings(): WgSettings {
 
 /** Controlla che sia un .conf WireGuard completo e ne ricava il server (Endpoint). */
 export function parseWgConf(text: string): { ok: true; host: string } | { ok: false; error: string } {
-  if (!/\[Interface\]/i.test(text)) return { ok: false, error: "manca la sezione [Interface]" };
-  if (!/^\s*PrivateKey\s*=\s*\S+/im.test(text)) return { ok: false, error: "manca PrivateKey" };
-  if (!/^\s*Address\s*=\s*\S+/im.test(text)) return { ok: false, error: "manca Address" };
-  if (!/\[Peer\]/i.test(text)) return { ok: false, error: "manca la sezione [Peer]" };
-  if (!/^\s*PublicKey\s*=\s*\S+/im.test(text)) return { ok: false, error: "manca PublicKey del server" };
+  if (!/\[Interface\]/i.test(text)) return { ok: false, error: "missing [Interface] section" };
+  if (!/^\s*PrivateKey\s*=\s*\S+/im.test(text)) return { ok: false, error: "missing PrivateKey" };
+  if (!/^\s*Address\s*=\s*\S+/im.test(text)) return { ok: false, error: "missing Address" };
+  if (!/\[Peer\]/i.test(text)) return { ok: false, error: "missing [Peer] section" };
+  if (!/^\s*PublicKey\s*=\s*\S+/im.test(text)) return { ok: false, error: "missing server PublicKey" };
   const ep = /^\s*Endpoint\s*=\s*\[?([^\]\s]+?)\]?:(\d+)\s*$/im.exec(text);
-  if (!ep) return { ok: false, error: "manca Endpoint (host:porta)" };
+  if (!ep) return { ok: false, error: "missing Endpoint (host:port)" };
   return { ok: true, host: ep[1] };
 }
 
@@ -117,7 +168,7 @@ export const wgStorage = {
   },
   /** Posizioni attive e utilizzabili: .conf caricato, oppure importata e chiave privata impostata. */
   usable(): WgLocation[] {
-    const hasKey = !!settings().privateKey;
+    const hasKey = !!settings().privateKey || poolSize() > 0;
     return vpnDb
       .prepare(
         "SELECT id, country, state, host, status, source, created_at FROM wg_locations WHERE status = 'ACTIVE' AND (config != '' OR (? AND server_pubkey != '')) ORDER BY country, state",
@@ -125,13 +176,44 @@ export const wgStorage = {
       .all(hasKey ? 1 : 0)
       .map(rowToLocation);
   },
-  config(id: number): string | null {
+  config(id: number, userid?: unknown): string | null {
     const row = vpnDb.prepare("SELECT host, config, server_pubkey FROM wg_locations WHERE id = ? AND status = 'ACTIVE'").get(id) as any;
     if (!row) return null;
     if (row.config) return String(row.config);
+    if (!row.server_pubkey) return null;
     const s = settings();
-    if (!s.privateKey || !row.server_pubkey) return null;
-    return composeConf(row.host, row.server_pubkey, s);
+    const privateKey = keyForUser(userid, s.privateKey);
+    if (!privateKey) return null;
+    return composeConf(row.host, row.server_pubkey, { ...s, privateKey });
+  },
+  /** Scorta di chiavi: solo un indizio della chiave, mai la chiave intera. */
+  keys(): WgKey[] {
+    return (vpnDb.prepare("SELECT * FROM wg_keys ORDER BY id").all() as any[]).map((r) => ({
+      id: r.id,
+      keyHint: hint(String(r.private_key)),
+      userid: r.userid || "",
+      assignedAt: r.assigned_at || null,
+      lastUsed: r.last_used || null,
+    }));
+  },
+  /** Chiavi private incollate in blocco (una per riga, o separate da spazi/virgole). */
+  addKeys(text: string): { added: number; duplicates: number; invalid: number } {
+    const items = String(text || "").split(/[\s,;]+/).map((k) => k.trim()).filter(Boolean);
+    const ins = vpnDb.prepare("INSERT OR IGNORE INTO wg_keys (private_key) VALUES (?)");
+    let added = 0, duplicates = 0, invalid = 0;
+    vpnDb.transaction(() => {
+      for (const k of items) {
+        if (!KEY_RE.test(k)) { invalid++; continue; }
+        if (ins.run(k).changes) added++; else duplicates++;
+      }
+    })();
+    return { added, duplicates, invalid };
+  },
+  releaseKey(id: number): void {
+    vpnDb.prepare("UPDATE wg_keys SET userid = '', assigned_at = NULL WHERE id = ?").run(id);
+  },
+  removeKey(id: number): void {
+    vpnDb.prepare("DELETE FROM wg_keys WHERE id = ?").run(id);
   },
   create(data: { country: string; state: string; host: string; config: string }): WgLocation {
     const r = vpnDb
@@ -157,7 +239,7 @@ export const wgStorage = {
     const res = await fetch(SURFSHARK_LIST, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(30000) });
     if (!res.ok) throw new Error(`Surfshark: HTTP ${res.status}`);
     const list = (await res.json()) as any[];
-    if (!Array.isArray(list)) throw new Error("Surfshark: risposta non valida");
+    if (!Array.isArray(list)) throw new Error("Surfshark: invalid response");
     const find = vpnDb.prepare("SELECT id FROM wg_locations WHERE host = ?");
     const ins = vpnDb.prepare(
       "INSERT INTO wg_locations (country, state, host, config, status, source, server_pubkey) VALUES (?, ?, ?, '', 'ACTIVE', 'surfshark', ?)",
@@ -181,14 +263,14 @@ export const wgStorage = {
   settingsPublic() {
     const s = settings();
     const k = s.privateKey;
-    return { hasKey: !!k, keyHint: k ? `${k.slice(0, 4)}…${k.slice(-4)}` : "", address: s.address, dns: s.dns, port: s.port };
+    return { hasKey: !!k, keyHint: hint(k), address: s.address, dns: s.dns, port: s.port };
   },
   saveSettings(data: { privateKey?: string; address?: string; dns?: string; port?: number }) {
     const sets: string[] = [];
     const vals: any[] = [];
     if (data.privateKey !== undefined && data.privateKey !== "") {
       const k = String(data.privateKey).trim();
-      if (!KEY_RE.test(k)) throw Object.assign(new Error("Chiave privata non valida (44 caratteri base64)"), { status: 400 });
+      if (!KEY_RE.test(k)) throw Object.assign(new Error("Invalid private key (44 base64 characters)"), { status: 400 });
       sets.push("private_key = ?"); vals.push(k);
     }
     if (data.address !== undefined) { sets.push("address = ?"); vals.push(String(data.address).trim()); }
@@ -211,7 +293,7 @@ export function wgApiResponse(tag: string, query: Record<string, unknown>): obje
   }
   if (tag === "wgconf") {
     const id = Number(query.id);
-    const conf = Number.isFinite(id) ? wgStorage.config(id) : null;
+    const conf = Number.isFinite(id) ? wgStorage.config(id, query.userid) : null;
     if (!conf) return { tag: "wgconf", success: "0", api_ver: "1.0v", message: "Posizione non disponibile" };
     return { tag: "wgconf", success: "1", api_ver: "1.0v", id: String(id), conf };
   }
@@ -234,7 +316,7 @@ export function registerWireguardRoutes(app: Express, requireAuth: RequestHandle
   app.post("/api/admin/wg-locations/upload", requireAuth, upload.array("files", 300), (req, res) => {
     try {
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      if (!files.length) return res.status(400).json({ message: "Nessun file caricato" });
+      if (!files.length) return res.status(400).json({ message: "No files uploaded" });
       const results = files.map((f) => {
         const text = f.buffer.toString("utf8").replace(/\r\n/g, "\n").trim() + "\n";
         const parsed = parseWgConf(text);
@@ -270,10 +352,44 @@ export function registerWireguardRoutes(app: Express, requireAuth: RequestHandle
     }
   });
 
+  app.get("/api/admin/wg-keys", requireAuth, (_req, res) => {
+    try {
+      res.json(wgStorage.keys());
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/wg-keys", requireAuth, (req, res) => {
+    try {
+      res.json(wgStorage.addKeys(String(req.body?.keys ?? "")));
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/wg-keys/:id/release", requireAuth, (req, res) => {
+    try {
+      wgStorage.releaseKey(Number(req.params.id));
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/admin/wg-keys/:id", requireAuth, (req, res) => {
+    try {
+      wgStorage.removeKey(Number(req.params.id));
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.put("/api/admin/wg-locations/:id", requireAuth, (req, res) => {
     try {
       const updated = wgStorage.update(Number(req.params.id), req.body ?? {});
-      if (!updated) return res.status(404).json({ message: "Posizione non trovata" });
+      if (!updated) return res.status(404).json({ message: "Location not found" });
       res.json(updated);
     } catch {
       res.status(500).json({ message: "Internal server error" });

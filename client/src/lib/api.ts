@@ -164,6 +164,30 @@ export async function importSurfshark(): Promise<{ added: number; updated: numbe
   return fetchApi("/api/admin/wg-locations/import-surfshark", { method: "POST" });
 }
 
+export interface WgKey {
+  id: number;
+  keyHint: string;
+  userid: string;
+  assignedAt: string | null;
+  lastUsed: string | null;
+}
+
+export async function getWgKeys(): Promise<WgKey[]> {
+  return fetchApi("/api/admin/wg-keys");
+}
+
+export async function addWgKeys(keys: string): Promise<{ added: number; duplicates: number; invalid: number }> {
+  return fetchApi("/api/admin/wg-keys", { method: "POST", body: JSON.stringify({ keys }) });
+}
+
+export async function releaseWgKey(id: number): Promise<void> {
+  await fetchApi(`/api/admin/wg-keys/${id}/release`, { method: "POST" });
+}
+
+export async function deleteWgKey(id: number): Promise<void> {
+  await fetchApi(`/api/admin/wg-keys/${id}`, { method: "DELETE" });
+}
+
 export async function getWgLocations(): Promise<WgLocation[]> {
   return fetchApi("/api/admin/wg-locations");
 }

@@ -44,9 +44,9 @@ type Form = {
 const emptyForm: Form = { kind: "mac", identifier: "", username: "", password: "", label: "", portalIndex: "0", expiresAt: "" };
 
 const statusBadge = (s: Activation["status"]) =>
-  s === "active" ? <Badge className="bg-green-600">Attiva</Badge>
-  : s === "pending" ? <Badge className="bg-amber-500">In attesa</Badge>
-  : <Badge variant="destructive">Bloccata</Badge>;
+  s === "active" ? <Badge className="bg-green-600">Active</Badge>
+  : s === "pending" ? <Badge className="bg-amber-500">Pending</Badge>
+  : <Badge variant="destructive">Blocked</Badge>;
 
 type AccessItem = { username: string; level: "full" | "maintenance"; note: string };
 
@@ -59,40 +59,40 @@ function AccessLevels() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/admin/access"] });
   const add = useMutation({
     mutationFn: async () => apiRequest("PUT", "/api/admin/access", { username: user.trim(), level: "maintenance", note }),
-    onSuccess: () => { setUser(""); setNote(""); refresh(); toast({ title: "Manutentore aggiunto" }); },
-    onError: (e: any) => toast({ title: "Errore", description: String(e?.message || e), variant: "destructive" }),
+    onSuccess: () => { setUser(""); setNote(""); refresh(); toast({ title: "Maintainer added" }); },
+    onError: (e: any) => toast({ title: "Error", description: String(e?.message || e), variant: "destructive" }),
   });
   const remove = useMutation({
     mutationFn: async (u: string) => apiRequest("DELETE", `/api/admin/access/${encodeURIComponent(u)}`),
-    onSuccess: () => { refresh(); toast({ title: "Tornato accesso completo" }); },
+    onSuccess: () => { refresh(); toast({ title: "Full access restored" }); },
   });
   const items = data?.items ?? [];
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Livelli di accesso</CardTitle>
+        <CardTitle>Access levels</CardTitle>
         <CardDescription>
-          Gli utenti elencati qui sono "Manutentori": nell'app vedono solo lo stato della linea (test di velocità e dati connessione), senza canali, film e serie.
-          Chi non e' in elenco ha l'accesso completo. Si applica all'utente della linea Xtream usato per entrare.
+          Users listed here are "Maintainers": in the app they only see the line status (speed test and connection details), without channels, movies or series.
+          Users not listed have full access. Applies to the Xtream line user used to sign in.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2 flex-wrap items-end">
-          <div><Label>Utente linea</Label><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="utente" /></div>
-          <div><Label>Nota</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="es. Tecnico ADSL zona nord" /></div>
-          <Button disabled={!user.trim() || add.isPending} onClick={() => add.mutate()}><Plus className="h-4 w-4 mr-2" />Aggiungi manutentore</Button>
+          <div><Label>Line user</Label><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="username" /></div>
+          <div><Label>Note</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. ADSL technician north area" /></div>
+          <Button disabled={!user.trim() || add.isPending} onClick={() => add.mutate()}><Plus className="h-4 w-4 mr-2" />Add maintainer</Button>
         </div>
-        {items.length === 0 ? <p className="text-muted-foreground text-sm">Nessun manutentore.</p> : (
+        {items.length === 0 ? <p className="text-muted-foreground text-sm">No maintainers.</p> : (
           <Table>
-            <TableHeader><TableRow><TableHead>Utente</TableHead><TableHead>Livello</TableHead><TableHead>Nota</TableHead><TableHead className="text-right">Azioni</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Level</TableHead><TableHead>Note</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
               {items.map((i) => (
                 <TableRow key={i.username}>
                   <TableCell className="font-mono">{i.username}</TableCell>
-                  <TableCell><Badge variant={i.level === "maintenance" ? "default" : "secondary"}>{i.level === "maintenance" ? "Manutentore" : "Completo"}</Badge></TableCell>
+                  <TableCell><Badge variant={i.level === "maintenance" ? "default" : "secondary"}>{i.level === "maintenance" ? "Maintainer" : "Full"}</Badge></TableCell>
                   <TableCell className="text-sm">{i.note || "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" title="Rimuovi (torna accesso completo)" onClick={() => remove.mutate(i.username)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                    <Button size="icon" variant="ghost" title="Remove (restore full access)" onClick={() => remove.mutate(i.username)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -119,7 +119,7 @@ export default function ActivationsPage() {
     setForm(null);
   };
   const fail = async (e: any) => {
-    toast({ title: "Errore", description: String(e?.message || e), variant: "destructive" });
+    toast({ title: "Error", description: String(e?.message || e), variant: "destructive" });
   };
 
   const save = useMutation({
@@ -131,19 +131,19 @@ export default function ActivationsPage() {
       if (f.id) await apiRequest("PUT", `/api/admin/activations/${f.id}`, body);
       else await apiRequest("POST", "/api/admin/activations", body);
     },
-    onSuccess: () => done("Salvata"),
+    onSuccess: () => done("Saved"),
     onError: fail,
   });
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => apiRequest("PUT", `/api/admin/activations/${id}`, { status }),
-    onSuccess: () => done("Aggiornata"),
+    onSuccess: () => done("Updated"),
     onError: fail,
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/admin/activations/${id}`),
-    onSuccess: () => done("Eliminata"),
+    onSuccess: () => done("Deleted"),
     onError: fail,
   });
 
@@ -155,49 +155,49 @@ export default function ActivationsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Activations</h1>
           <p className="text-muted-foreground text-sm">
-            Per i Login Type "MAC Address" e "Activation Code": l'app chiede le credenziali a questo servizio con il proprio MAC o con un codice.
+            For the "MAC Address" and "Activation Code" login types: the app requests its credentials from this service using its MAC address or a code.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Aggiorna</Button>
-          <Button onClick={() => setForm({ ...emptyForm })}><Plus className="h-4 w-4 mr-2" />Nuova</Button>
+          <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
+          <Button onClick={() => setForm({ ...emptyForm })}><Plus className="h-4 w-4 mr-2" />New</Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Dispositivi e codici {data ? `(${data.total})` : ""}</CardTitle>
+          <CardTitle>Devices and codes {data ? `(${data.total})` : ""}</CardTitle>
           <CardDescription>
-            {data?.pending ? `${data.pending} dispositivo/i in attesa: premi la matita e assegna utente e password della linea.` : "I dispositivi sconosciuti compaiono qui da soli appena aprono l'app in modalita' MAC."}
+            {data?.pending ? `${data.pending} device(s) pending: click the pencil and assign the line username and password.` : "Unknown devices appear here automatically as soon as they open the app in MAC mode."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? <p>Caricamento…</p> : items.length === 0 ? <p className="text-muted-foreground">Nessuna attivazione.</p> : (
+          {isLoading ? <p>Loading…</p> : items.length === 0 ? <p className="text-muted-foreground">No activations.</p> : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tipo</TableHead><TableHead>MAC / Codice</TableHead><TableHead>Linea (utente)</TableHead>
-                  <TableHead>Stato</TableHead><TableHead>Ultimo accesso</TableHead><TableHead>Dispositivo</TableHead><TableHead className="text-right">Azioni</TableHead>
+                  <TableHead>Type</TableHead><TableHead>MAC / Code</TableHead><TableHead>Line (user)</TableHead>
+                  <TableHead>Status</TableHead><TableHead>Last seen</TableHead><TableHead>Device</TableHead><TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell>{a.kind === "mac" ? "MAC" : "Codice"}</TableCell>
+                    <TableCell>{a.kind === "mac" ? "MAC" : "Code"}</TableCell>
                     <TableCell className="font-mono">{a.identifier}{a.label ? <div className="text-xs text-muted-foreground font-sans">{a.label}</div> : null}</TableCell>
                     <TableCell>{a.username || <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell>{statusBadge(a.status)}{a.expiresAt ? <div className="text-xs text-muted-foreground">scade {a.expiresAt}</div> : null}</TableCell>
+                    <TableCell>{statusBadge(a.status)}{a.expiresAt ? <div className="text-xs text-muted-foreground">expires {a.expiresAt}</div> : null}</TableCell>
                     <TableCell className="text-xs">{a.lastSeen ? `${a.lastSeen} UTC` : "—"}{a.lastIp ? <div className="text-muted-foreground">{a.lastIp}</div> : null}</TableCell>
                     <TableCell className="text-xs">{a.deviceModel || "—"}{a.appVersion ? <div className="text-muted-foreground">{a.appVersion}</div> : null}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      <Button size="icon" variant="ghost" title="Modifica / assegna linea"
+                      <Button size="icon" variant="ghost" title="Edit / assign line"
                         onClick={() => setForm({ id: a.id, kind: a.kind, identifier: a.identifier, username: a.username, password: a.password, label: a.label, portalIndex: String(a.portalIndex), expiresAt: a.expiresAt || "" })}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       {a.status === "blocked"
-                        ? <Button size="icon" variant="ghost" title="Sblocca" onClick={() => setStatus.mutate({ id: a.id, status: a.username && a.password ? "active" : "pending" })}><CheckCircle2 className="h-4 w-4" /></Button>
-                        : <Button size="icon" variant="ghost" title="Blocca" onClick={() => setStatus.mutate({ id: a.id, status: "blocked" })}><Ban className="h-4 w-4" /></Button>}
-                      <Button size="icon" variant="ghost" title="Elimina" onClick={() => { if (confirm("Eliminare questa attivazione?")) remove.mutate(a.id); }}>
+                        ? <Button size="icon" variant="ghost" title="Unblock" onClick={() => setStatus.mutate({ id: a.id, status: a.username && a.password ? "active" : "pending" })}><CheckCircle2 className="h-4 w-4" /></Button>
+                        : <Button size="icon" variant="ghost" title="Block" onClick={() => setStatus.mutate({ id: a.id, status: "blocked" })}><Ban className="h-4 w-4" /></Button>}
+                      <Button size="icon" variant="ghost" title="Delete" onClick={() => { if (confirm("Delete this activation?")) remove.mutate(a.id); }}>
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
                     </TableCell>
@@ -214,46 +214,46 @@ export default function ActivationsPage() {
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form?.id ? "Modifica attivazione" : "Nuova attivazione"}</DialogTitle>
-            <DialogDescription>Utente e password sono quelli della linea Xtream sul portale: l'app li riceve e fa il login da sola.</DialogDescription>
+            <DialogTitle>{form?.id ? "Edit activation" : "New activation"}</DialogTitle>
+            <DialogDescription>Username and password of the Xtream line on the portal: the app receives them and signs in automatically.</DialogDescription>
           </DialogHeader>
           {form && (
             <div className="space-y-3">
               <div>
-                <Label>Tipo</Label>
+                <Label>Type</Label>
                 <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v as "mac" | "code" })} disabled={!!form.id}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mac">MAC (il dispositivo si identifica da solo)</SelectItem>
-                    <SelectItem value="code">Codice di attivazione (lo digita l'utente)</SelectItem>
+                    <SelectItem value="mac">MAC (the device identifies itself)</SelectItem>
+                    <SelectItem value="code">Activation code (typed by the user)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>{form.kind === "mac" ? "MAC del dispositivo" : "Codice (vuoto = ne genero uno)"}</Label>
-                <Input value={form.identifier} disabled={!!form.id} placeholder={form.kind === "mac" ? "AA:BB:CC:DD:EE:FF" : "es. K7M2P9QX"}
+                <Label>{form.kind === "mac" ? "Device MAC" : "Code (empty = generate one)"}</Label>
+                <Input value={form.identifier} disabled={!!form.id} placeholder={form.kind === "mac" ? "AA:BB:CC:DD:EE:FF" : "e.g. K7M2P9QX"}
                   onChange={(e) => setForm({ ...form, identifier: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Utente linea</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
-                <div><Label>Password linea</Label><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+                <div><Label>Line user</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
+                <div><Label>Line password</Label><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Portale</Label>
+                  <Label>Portal</Label>
                   <Select value={form.portalIndex} onValueChange={(v) => setForm({ ...form, portalIndex: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{[0, 1, 2, 3, 4].map((i) => <SelectItem key={i} value={String(i)}>Portale {i + 1}</SelectItem>)}</SelectContent>
+                    <SelectContent>{[0, 1, 2, 3, 4].map((i) => <SelectItem key={i} value={String(i)}>Portal {i + 1}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div><Label>Scadenza (opz.)</Label><Input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} /></div>
+                <div><Label>Expiry (optional)</Label><Input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} /></div>
               </div>
-              <div><Label>Nota</Label><Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="es. Mario Rossi" /></div>
+              <div><Label>Note</Label><Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. John Smith" /></div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setForm(null)}>Annulla</Button>
-            <Button disabled={!form || save.isPending} onClick={() => form && save.mutate(form)}>Salva</Button>
+            <Button variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+            <Button disabled={!form || save.isPending} onClick={() => form && save.mutate(form)}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

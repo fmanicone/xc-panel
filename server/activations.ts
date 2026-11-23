@@ -174,7 +174,7 @@ export function registerActivationRoutes(
   app.put("/api/admin/access", requireAuth, (req, res) => {
     const username = String(req.body?.username || "").trim();
     const level = req.body?.level === "maintenance" ? "maintenance" : req.body?.level === "full" ? "full" : null;
-    if (!username || !level) return res.status(400).json({ message: "Servono utente e livello (full o maintenance)" });
+    if (!username || !level) return res.status(400).json({ message: "Username and level (full or maintenance) are required" });
     activationsDb.prepare("INSERT INTO access_levels (username, level, note) VALUES (?, ?, ?) ON CONFLICT(username) DO UPDATE SET level = excluded.level, note = excluded.note")
       .run(username, level, String(req.body?.note || ""));
     res.json({ success: true });
@@ -197,7 +197,7 @@ export function registerActivationRoutes(
     if (!identifier) return res.status(400).json({ message: kind === "mac" ? "MAC non valido (12 cifre esadecimali)" : "Codice non valido (4-64 caratteri A-Z 0-9 _ -)" });
     const username = String(b.username || "").trim();
     const password = String(b.password || "").trim();
-    if (!username || !password) return res.status(400).json({ message: "Utente e password della linea sono obbligatori" });
+    if (!username || !password) return res.status(400).json({ message: "Line username and password are required" });
     try {
       const info = activationsDb.prepare(
         "INSERT INTO activations (kind, identifier, username, password, portal_index, label, status, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -205,7 +205,7 @@ export function registerActivationRoutes(
       const row = activationsDb.prepare("SELECT * FROM activations WHERE id = ?").get(info.lastInsertRowid) as Row;
       res.status(201).json(toApi(row));
     } catch (e: any) {
-      if (String(e.message).includes("UNIQUE")) return res.status(409).json({ message: "Esiste gia' un'attivazione con questo identificativo" });
+      if (String(e.message).includes("UNIQUE")) return res.status(409).json({ message: "An activation with this identifier already exists" });
       throw e;
     }
   });
@@ -213,14 +213,14 @@ export function registerActivationRoutes(
   app.put("/api/admin/activations/:id", requireAuth, (req, res) => {
     const id = Number(req.params.id);
     const cur = activationsDb.prepare("SELECT * FROM activations WHERE id = ?").get(id) as Row | undefined;
-    if (!cur) return res.status(404).json({ message: "Non trovata" });
+    if (!cur) return res.status(404).json({ message: "Not found" });
     const b = req.body || {};
     const username = b.username !== undefined ? String(b.username).trim() : cur.username;
     const password = b.password !== undefined ? String(b.password).trim() : cur.password;
     let status: Row["status"] = ["active", "pending", "blocked"].includes(b.status) ? b.status : cur.status;
     // assegnando utente e password a una riga in attesa, diventa attiva
     if (cur.status === "pending" && b.status === undefined && username && password) status = "active";
-    if (status === "active" && (!username || !password)) return res.status(400).json({ message: "Per attivare servono utente e password" });
+    if (status === "active" && (!username || !password)) return res.status(400).json({ message: "Username and password are required to activate" });
     activationsDb.prepare("UPDATE activations SET username = ?, password = ?, portal_index = ?, label = ?, status = ?, expires_at = ? WHERE id = ?")
       .run(username, password, b.portalIndex !== undefined ? Number(b.portalIndex) || 0 : cur.portal_index,
         b.label !== undefined ? String(b.label) : cur.label, status, b.expiresAt !== undefined ? (b.expiresAt || null) : cur.expires_at, id);
